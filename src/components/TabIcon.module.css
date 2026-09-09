@@ -1,0 +1,5 @@
+.glyph {
+  display: block;
+  stroke-width: var(--glyph-stroke, 1.5);
+  transition: stroke-width 0.12s;
+}

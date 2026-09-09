@@ -1,0 +1,40 @@
+.label {
+  display: block;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  margin-bottom: -8px;
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  background: var(--paper-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--shu);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--shu) 30%, transparent);
+}
+
+/* 商品名だけは主役なので大きく取る。 */
+.lg {
+  font-size: 19px;
+  min-height: 56px;
+}
+
+/* JAN の手入力。機械が読む値なので等幅で受ける。 */
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}

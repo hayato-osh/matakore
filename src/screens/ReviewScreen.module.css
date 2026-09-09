@@ -1,0 +1,90 @@
+/* 押印。四つの印を同じ大きさで並べ、迷いを寸法で作らない。 */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 116px;
+  background: var(--paper-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--rule-soft);
+  transition:
+    transform 0.09s,
+    box-shadow 0.09s;
+}
+
+/* 押し込みを影で表す。触れた手応えがないと1タップの確信が持てない。 */
+.stamp:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--rule-soft);
+}
+
+.current {
+  background: var(--paper-lo);
+  border-color: currentColor;
+}
+
+.staple {
+  color: var(--shu);
+}
+.yes {
+  color: var(--ai);
+}
+.meh {
+  color: var(--yamabuki);
+}
+.no {
+  color: var(--sumi);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.label {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  color: var(--ink);
+  margin-top: 4px;
+}
+
+.hint {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.stars {
+  gap: 1px;
+}
+
+.star {
+  background: none;
+  border: none;
+  font-size: 25px;
+  color: var(--rule);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.starOn {
+  color: var(--shu);
+}

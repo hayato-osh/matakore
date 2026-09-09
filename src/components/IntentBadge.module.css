@@ -1,0 +1,107 @@
+.seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  transform: rotate(var(--tilt, 0deg));
+}
+
+.sm {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  flex: none;
+}
+
+.sm .mark {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+  border-radius: 1px;
+  flex: none;
+}
+
+/* 大きい印。押した瞬間を見せる。 */
+.lg {
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  width: 116px;
+  height: 116px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  flex: none;
+  transform: rotate(-7.5deg);
+  animation: press 0.5s cubic-bezier(0.16, 1.1, 0.3, 1) backwards;
+  box-shadow:
+    inset 0 0 0 1.5px currentColor,
+    inset 0 0 18px color-mix(in srgb, var(--shu) 10%, transparent);
+}
+
+.lg .mark {
+  border: none;
+  font-size: 44px;
+  line-height: 1;
+  transform: none;
+}
+
+.word {
+  font-size: 19px;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  margin-top: 3px;
+}
+
+.staple {
+  color: var(--shu);
+}
+.yes {
+  color: var(--ai);
+}
+.meh {
+  color: var(--yamabuki);
+}
+.no {
+  color: var(--sumi);
+  opacity: 0.78;
+}
+.none {
+  color: var(--mizu);
+}
+
+.none .mark {
+  border-style: dashed;
+}
+
+/* まだ押されていないので、傾きも押し込みも持たない。 */
+.lg.none {
+  border-style: dashed;
+  border-width: 2px;
+  box-shadow: none;
+  transform: none;
+  animation: none;
+}
+
+@keyframes press {
+  0% {
+    opacity: 0;
+    transform: rotate(-15deg) scale(1.55);
+  }
+  55% {
+    opacity: 1;
+    transform: rotate(-7.5deg) scale(0.95);
+  }
+  78% {
+    transform: rotate(-6deg) scale(1.025);
+  }
+  100% {
+    transform: rotate(-7.5deg) scale(1);
+  }
+}

@@ -1,0 +1,43 @@
+.row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.row::-webkit-scrollbar {
+  display: none;
+}
+
+.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.minor {
+  font-size: 13.5px;
+}
+
+.add {
+  border-style: dashed;
+}

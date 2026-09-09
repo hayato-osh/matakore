@@ -1,0 +1,52 @@
+/* 判定の一枚。印と本文を横に組み、上下を二重罫で挟む。 */
+.hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 4px 22px;
+  border-top: 3px double var(--rule);
+  border-bottom: 3px double var(--rule);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.facts {
+  color: var(--ink-2);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+/* 未来の自分への申し送り。判定の次に大きく扱う。 */
+.memo {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.75;
+  text-indent: -0.5em;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  padding: 2px 9px;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.history li {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 13px;
+  color: var(--ink-2);
+}

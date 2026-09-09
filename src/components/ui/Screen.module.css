@@ -1,0 +1,70 @@
+/* 帳簿の一葉。左に綴じ代の朱罫を引く。 */
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 40px 26px;
+  max-width: 660px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.screen::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15px;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--margin-rule) 40px,
+    var(--margin-rule) calc(100% - 40px),
+    transparent
+  );
+}
+
+/* カメラのように紙の外へ出す画面。綴じ代も余白も持たせない。 */
+.bleed {
+  height: 100%;
+  padding: 0;
+  gap: 0;
+  max-width: none;
+}
+
+.bleed::before {
+  display: none;
+}
+
+/* 読み込み時の段組み。上から順に紙が置かれていく感じにする。 */
+.screen > * {
+  animation: settle 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+
+.screen > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.screen > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.screen > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.screen > *:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.screen > *:nth-child(5) {
+  animation-delay: 0.18s;
+}
+.screen > *:nth-child(n + 6) {
+  animation-delay: 0.22s;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+}

@@ -1,0 +1,9 @@
+/* 未評価だけは行の右端が日付ではなく「押しに行く」導線になる。 */
+.cta {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--shu);
+  border: 1px solid var(--shu);
+  padding: 7px 13px;
+}

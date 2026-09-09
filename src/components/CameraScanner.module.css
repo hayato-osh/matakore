@@ -1,0 +1,130 @@
+.camera {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  background: #14120f;
+  overflow: hidden;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* デコードしているのは中央の帯だけ。トンボで「ここに合わせる」と伝える。 */
+.frame {
+  position: absolute;
+  inset: 27.5% 9%;
+  box-shadow: 0 0 0 100vmax rgb(20 18 15 / 0.52);
+}
+
+.frame span {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid var(--shu-bright);
+}
+
+.frame span:nth-child(1) {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+}
+.frame span:nth-child(2) {
+  top: -2px;
+  right: -2px;
+  border-left: none;
+  border-bottom: none;
+}
+.frame span:nth-child(3) {
+  bottom: -2px;
+  left: -2px;
+  border-right: none;
+  border-top: none;
+}
+.frame span:nth-child(4) {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--shu-bright), transparent);
+  box-shadow: 0 0 12px rgb(201 67 42 / 0.9);
+  animation: sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  0%,
+  100% {
+    top: 4%;
+  }
+  50% {
+    top: 96%;
+  }
+}
+
+.status {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  text-align: center;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--overlay-chip);
+  padding: 6px 14px;
+  border-radius: 2px;
+}
+
+/* 版面の端に入れる縦組みの標題。 */
+.wordmark {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 14px;
+  writing-mode: vertical-rl;
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  color: rgb(245 240 227 / 0.82);
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.7);
+  pointer-events: none;
+}
+
+.engine {
+  position: absolute;
+  left: 14px;
+  bottom: 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgb(245 240 227 / 0.5);
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.8);
+}
+
+.torch {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 14px;
+  background: rgb(20 18 15 / 0.5);
+  border: 1px solid rgb(245 240 227 / 0.4);
+  color: #f5f0e3;
+  border-radius: 2px;
+  padding: 9px 15px;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+}
+
+.torchOn {
+  background: var(--shu-bright);
+  border-color: var(--shu-bright);
+}

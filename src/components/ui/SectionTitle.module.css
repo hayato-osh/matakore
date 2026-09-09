@@ -1,0 +1,25 @@
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--ink-2);
+}
+
+/* 見出しから右端まで罫を伸ばす。件数はその先に置く。 */
+.title::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--rule);
+  transform: translateY(-4px);
+}
+
+.count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  order: 3;
+}

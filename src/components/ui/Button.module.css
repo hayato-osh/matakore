@@ -1,0 +1,65 @@
+.btn {
+  min-height: 48px;
+  padding: 10px 18px;
+  background: var(--paper-hi);
+  border: 1px solid var(--ink-3);
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.08em;
+  box-shadow: 1px 1px 0 var(--rule);
+  transition:
+    transform 0.08s,
+    box-shadow 0.08s;
+}
+
+.btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 0 0 0 var(--rule);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+/*
+ * 朱は「判定」の色として温存する（印・綴じ代・未評価の催促）。
+ * 行動ボタンまで朱にすると、棚の前で目が最初に拾うべき印と競合する。
+ */
+.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+}
+
+.ghost {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 4px;
+  align-self: flex-start;
+}
+
+.danger {
+  background: none;
+  border-color: var(--sumi);
+  color: var(--sumi);
+}
+
+.lg {
+  flex: 1;
+  min-height: 58px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sm {
+  min-height: 38px;
+  padding: 6px 13px;
+  font-size: 13px;
+}

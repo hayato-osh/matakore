@@ -1,0 +1,39 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: env(safe-area-inset-top);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 23px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+.sub {
+  margin: 3px 0 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+}
+
+.back {
+  background: none;
+  border: none;
+  font-size: 25px;
+  line-height: 1;
+  width: 34px;
+  height: 42px;
+  margin-left: -8px;
+  color: var(--ink-3);
+  cursor: pointer;
+}

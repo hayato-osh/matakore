@@ -1,0 +1,46 @@
+/* 文字まわりの共有スタイル。コンポーネントにするほどの構造を持たないものだけ。 */
+
+.muted {
+  color: var(--ink-3);
+}
+
+.small {
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+/* JAN・日付・数値。機械が読んだ値であることを書体で示す。 */
+.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  color: var(--ink-3);
+  text-align: center;
+  padding: 44px 0;
+  letter-spacing: 0.1em;
+}
+
+.flash {
+  margin: 0;
+  color: var(--shu);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  animation: appear 0.3s;
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--shu);
+  font-size: 12.5px;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+}

@@ -1,0 +1,112 @@
+/*
+ * 「判取帳」— 帳簿に朱印を押す。
+ *
+ * このアプリが返すのは情報ではなく「判定」なので、判定を押印として扱う。
+ * 声は2つだけに絞る:
+ *   ゴシック … 日本語のすべて。店内で小さい字を片手で読むので、可読性を最優先する
+ *   等幅    … JAN・日付・数値（機械が読んだ値）。ラテン専用サブセットのみ
+ *
+ * 日本語の webfont は Zen Kaku Gothic New 一書体（400/700）に絞っている。
+ * CDN 参照はオフライン（店内）で死ぬのでバンドル同梱にしてあり、その分だけ重さに直結する。
+ * 見出しと本文の差は書体ではなく、寸法・字間・色・罫でつける。
+ *
+ * ここと global.css だけがグローバル。見た目の実体はすべて *.module.css に閉じる。
+ */
+
+/* 昼の版（和紙）。夜の版は下でトークンだけ差し替える。 */
+:root {
+  /* 和紙 */
+  --paper: #ece4d3;
+  --paper-hi: #f5f0e3;
+  --paper-lo: #e0d7c2;
+
+  /* 墨 */
+  --ink: #1e1b16;
+  --ink-2: #554e3f;
+  --ink-3: #8a8271;
+  --rule: rgb(30 27 22 / 0.16);
+  --rule-soft: rgb(30 27 22 / 0.09);
+  --press: rgb(30 27 22 / 0.05);
+  --margin-rule: rgb(176 52 30 / 0.28);
+  --overlay-chip: rgb(245 240 227 / 0.94);
+
+  /* 四色のインク。◎○△✕ の判別は記号が主、色は補強。 */
+  --shu: #b0341e; /* 朱 — 定番 */
+  --shu-bright: #c9432a;
+  --ai: #1d4c69; /* 藍 — また買う */
+  --yamabuki: #8f6612; /* 山吹 — 微妙 */
+  --sumi: #2a2720; /* 墨 — もういい */
+  --mizu: #9a927f; /* 未評価 */
+
+  --grain-blend: multiply;
+  --grain-opacity: 0.24;
+
+  --sans: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+  --mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  color-scheme: light;
+}
+
+/*
+ * 夜の版（墨）。地と字を入れ替える — 生成り色が字になり、墨が地になる。
+ * 藍と山吹はそのままだと黒地に沈むので明度を上げる。
+ * 「もういい」の墨は黒地では色として成立しないため鼠に置き換え、取り消し線で意味を保つ。
+ * 朱だけは昼夜で役割が変わらない。押した印は夜でも朱である。
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #15130f;
+    --paper-hi: #1d1a14;
+    --paper-lo: #100e0b;
+
+    --ink: #ece4d3;
+    --ink-2: #b0a794;
+    --ink-3: #7b7363;
+    --rule: rgb(236 228 211 / 0.17);
+    --rule-soft: rgb(236 228 211 / 0.08);
+    --press: rgb(236 228 211 / 0.06);
+    --margin-rule: rgb(217 85 58 / 0.42);
+    --overlay-chip: rgb(29 26 20 / 0.92);
+
+    --shu: #d9553a;
+    --shu-bright: #e8664a;
+    --ai: #78aecd;
+    --yamabuki: #cfa03a;
+    --sumi: #9c9484;
+    --mizu: #6b6558;
+
+    --grain-blend: overlay;
+    --grain-opacity: 0.09;
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #15130f;
+  --paper-hi: #1d1a14;
+  --paper-lo: #100e0b;
+
+  --ink: #ece4d3;
+  --ink-2: #b0a794;
+  --ink-3: #7b7363;
+  --rule: rgb(236 228 211 / 0.17);
+  --rule-soft: rgb(236 228 211 / 0.08);
+  --press: rgb(236 228 211 / 0.06);
+  --margin-rule: rgb(217 85 58 / 0.42);
+  --overlay-chip: rgb(29 26 20 / 0.92);
+
+  --shu: #d9553a;
+  --shu-bright: #e8664a;
+  --ai: #78aecd;
+  --yamabuki: #cfa03a;
+  --sumi: #9c9484;
+  --mizu: #6b6558;
+
+  --grain-blend: overlay;
+  --grain-opacity: 0.09;
+
+  color-scheme: dark;
+}

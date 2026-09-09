@@ -1,0 +1,79 @@
+.app {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100dvh;
+  isolation: isolate;
+}
+
+/* 紙の目。全面に薄く敷いて、単色の平面に見えないようにする。 */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  background-image: var(--grain);
+  opacity: var(--grain-opacity);
+  mix-blend-mode: var(--grain-blend);
+}
+
+.main {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --- 索引タブ --- */
+.tabbar {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--paper-lo);
+  border-top: 1px solid var(--rule);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  position: relative;
+  background: none;
+  border: none;
+  border-top: 3px solid transparent;
+  margin-top: -1px;
+  padding: 9px 0 11px;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 58px;
+}
+
+/* 選択中は線を太らせる。色だけに頼らず、線の太さでも差をつける。
+   アイコンの線幅はカスタムプロパティ越しに渡す（モジュールを跨いで書かない）。 */
+.active {
+  background: var(--paper);
+  border-top-color: var(--shu);
+  color: var(--ink);
+  --glyph-stroke: 2;
+}
+
+.label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.badge {
+  position: absolute;
+  top: 5px;
+  right: calc(50% - 27px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--shu);
+  color: var(--on-shu);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 17px;
+}

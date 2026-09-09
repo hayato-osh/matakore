@@ -1,0 +1,8 @@
+/* カメラの下に敷く手入力の帯。カメラ側が伸びるので、こちらは縮ませない。 */
+.manual {
+  flex: none;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  background: var(--paper-hi);
+  border-top: 1px solid var(--rule);
+  box-shadow: 0 -12px 24px -20px rgb(30 27 22 / 0.5);
+}

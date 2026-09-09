@@ -1,0 +1,42 @@
+/* 並べ方だけの共有スタイル。色や書体は持たせない。 */
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row > input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 画面の主要な行動を横に並べる。 */
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 画面末尾の補助行。罫を一本引いて本文と切る。 */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--rule);
+  padding-top: 14px;
+  font-size: 12px;
+}
+
+/* ul / ol のリセット。帳簿の行は罫で区切るので、記号も余白も持たせない。 */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
