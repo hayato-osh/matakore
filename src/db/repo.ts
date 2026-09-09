@@ -1,5 +1,5 @@
 import { db, newId } from './db'
-import type { Category, Product, Purchase, RepeatIntent, Review } from './types'
+import type { Category, Product, ProductSource, Purchase, RepeatIntent, Review } from './types'
 
 export const INTENT_RANK: Record<RepeatIntent, number> = { staple: 0, yes: 1, meh: 2, no: 3 }
 
@@ -79,9 +79,16 @@ export type ProductInput = {
   rawName?: string
   brand?: string
   categoryId: string
+  /** 外部APIから取れたときだけ入る。スナップショットとして保存する（§4.2） */
+  imageUrl?: string
+  source?: ProductSource
+  fetchedAt?: number
 }
 
-/** 商品マスタの upsert。fetchedAt / source は既存値を尊重する（手入力で上書きしても由来を消さない）。 */
+/**
+ * 商品マスタの upsert。source / fetchedAt / imageUrl は新しい解決結果があればそれを、
+ * 無ければ既存値を尊重する（手入力で名前を直しても API 由来という事実は消さない）。
+ */
 export const upsertProduct = async (input: ProductInput) => {
   const existing = await db.products.get(input.jan)
   const product: Product = {
@@ -90,9 +97,10 @@ export const upsertProduct = async (input: ProductInput) => {
     name: input.name,
     rawName: input.rawName ?? existing?.rawName,
     brand: input.brand || undefined,
+    imageUrl: input.imageUrl ?? existing?.imageUrl,
     categoryId: input.categoryId,
-    source: existing?.source ?? 'manual',
-    fetchedAt: existing?.fetchedAt ?? Date.now(),
+    source: input.source ?? existing?.source ?? 'manual',
+    fetchedAt: input.fetchedAt ?? existing?.fetchedAt ?? Date.now(),
   }
   await db.products.put(product)
   return product

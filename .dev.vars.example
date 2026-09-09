@@ -1,0 +1,9 @@
+# cp .dev.vars.example .dev.vars して値を入れる（.dev.vars は git に入れない）
+# 本番は wrangler secret put YAHOO_APP_ID などで登録する。キーは値が空でも消さない（wrangler types が型を作る）。
+
+# vite dev の前には Cloudflare Access がいないので、ローカルでは JWT 検証を外す。本番には絶対に置かない
+DEV_NO_AUTH=1
+# Yahoo!デベロッパーネットワークの Client ID（アプリケーションID）
+YAHOO_APP_ID=
+# 楽天ウェブサービスのアプリID
+RAKUTEN_APP_ID=

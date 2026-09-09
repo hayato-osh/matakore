@@ -1,0 +1,19 @@
+/* 帳簿に貼った写真。細い罫で囲み、紙の色で余白を埋める。 */
+.md,
+.lg {
+  flex: none;
+  object-fit: contain;
+  background: var(--paper-hi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.md {
+  width: 44px;
+  height: 44px;
+}
+
+.lg {
+  width: 72px;
+  height: 72px;
+}

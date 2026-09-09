@@ -1,0 +1,5 @@
+# pnpm 10+ の設定ファイル（ワークスペースではない。単一パッケージ）。
+# postinstall を許可する依存。workerd は wrangler / vite-plugin のローカル実行に要るバイナリを落とす。
+allowBuilds:
+  esbuild: true
+  workerd: true

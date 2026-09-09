@@ -10,6 +10,8 @@ import { buildBackup, buildPurchasesCsv, buildReviewsCsv, download, importBackup
 import { stats } from '../db/repo'
 import { cx } from '../lib/cx'
 import { formatDate } from '../lib/format'
+import { checkResolver, relogin, SOURCE_LABEL } from '../lib/resolver'
+import { BUILD_ID, checkForUpdate } from '../lib/sw'
 import { getTheme, setTheme, THEMES, type Theme } from '../lib/theme'
 import layout from '../styles/layout.module.css'
 import text from '../styles/text.module.css'
@@ -22,10 +24,41 @@ export default function SettingsScreen() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const [theme, setThemeState] = useState<Theme>(getTheme)
-
   const pickTheme = (next: Theme) => {
     setTheme(next)
     setThemeState(next)
+  }
+
+  const [updateStatus, setUpdateStatus] = useState('')
+
+  const update = async () => {
+    setUpdateStatus('確認中…')
+    const r = await checkForUpdate()
+    setUpdateStatus(
+      r === 'updating'
+        ? '新しい版を取り込んでいます。数秒で再読み込みされます'
+        : r === 'latest'
+          ? 'この版が最新です'
+          : r === 'offline'
+            ? '圏外のため確認できません'
+            : 'このブラウザでは更新確認を使えません',
+    )
+  }
+
+  const [resolverStatus, setResolverStatus] = useState('')
+  const [needLogin, setNeedLogin] = useState(false)
+
+  const testResolver = async () => {
+    setResolverStatus('確認中…')
+    setNeedLogin(false)
+    const r = await checkResolver()
+    if (r.ok) {
+      const sources = r.sources.map((s) => SOURCE_LABEL[s as keyof typeof SOURCE_LABEL] ?? s).join(' / ')
+      setResolverStatus(`接続OK${r.user ? `（${r.user}）` : ''}。有効なソース: ${sources}`)
+    } else {
+      setResolverStatus(`接続できません: ${r.message}`)
+      setNeedLogin(r.message.includes('ログイン'))
+    }
   }
 
   const exportAll = async () => {
@@ -104,6 +137,24 @@ export default function SettingsScreen() {
       </section>
 
       <section className={styles.card}>
+        <SectionTitle>商品マスタ解決</SectionTitle>
+        <p className={cx(text.muted, text.small)}>
+          未知の JAN を読んだとき、同じ Worker の /api 経由で Yahoo!／楽天／Open Food Facts から商品名を引く。
+          認証は Cloudflare Access（このアプリを開いたときのログイン）に任せていて、ここで入れるものは無い。
+          判定はこれが無くても動く（ローカルだけで完結する）。
+        </p>
+        <div className={layout.actions}>
+          <Button onClick={() => void testResolver()}>接続を確認</Button>
+          {needLogin && (
+            <Button variant="primary" onClick={relogin}>
+              ログインし直す
+            </Button>
+          )}
+        </div>
+        {resolverStatus && <p className={cx(text.small, text.muted)}>{resolverStatus}</p>}
+      </section>
+
+      <section className={styles.card}>
         <SectionTitle>エクスポート</SectionTitle>
         <div className={layout.stack}>
           <Button onClick={() => void exportAll()}>完全バックアップ（JSON）</Button>
@@ -150,8 +201,18 @@ export default function SettingsScreen() {
         </Button>
       </section>
 
+      <section className={styles.card}>
+        <SectionTitle>アプリの版</SectionTitle>
+        <p className={cx(text.muted, text.small)}>
+          ビルド <span className={text.mono}>{BUILD_ID}</span>。ホーム画面のアプリは古い版が残りやすいので、
+          表示がおかしいときはここから更新する。起動時と1時間ごとにも自動で確認している。
+        </p>
+        <Button onClick={() => void update()}>更新を確認</Button>
+        {updateStatus && <p className={cx(text.small, text.muted)}>{updateStatus}</p>}
+      </section>
+
       <p className={cx(text.muted, text.small, styles.version)}>
-        matakore — Phase 0（外部API接続なし・完全ローカル）
+        matakore — Phase 1（JAN 解決は Workers 経由・判定はローカル完結）
       </p>
     </Screen>
   )

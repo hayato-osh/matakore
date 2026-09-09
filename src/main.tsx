@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { ensureSeeded } from './db/db'
+import { startServiceWorker } from './lib/sw'
 import { applyTheme, getTheme } from './lib/theme'
 
 // 日本語は Zen Kaku Gothic New 一書体（400 / 700）だけ。1ウェイト約 0.9MB あるので増やさない。
@@ -17,6 +18,7 @@ import './styles/global.css'
 
 applyTheme(getTheme())
 void ensureSeeded()
+startServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

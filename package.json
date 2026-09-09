@@ -7,21 +7,28 @@
     "dev": "vite",
     "dev:host": "vite --host",
     "build": "tsc -b && vite build",
+    "deploy": "pnpm build && wrangler deploy",
+    "preview": "vite preview",
+    "test": "vitest run",
     "lint": "oxlint",
     "typecheck": "tsc -b --noEmit",
-    "preview": "vite preview",
-    "test": "vitest run"
+    "types": "wrangler types --strict-vars false",
+    "migrate:local": "wrangler d1 migrations apply matakore --local",
+    "migrate:remote": "wrangler d1 migrations apply matakore --remote"
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.3.0",
     "@fontsource/zen-kaku-gothic-new": "^5.3.0",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
+    "hono": "^4.13.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "workbox-window": "^7.4.1",
     "zxing-wasm": "^2.1.2"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.54.5",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -32,6 +39,7 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
     "vite-plugin-pwa": "^1.0.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "wrangler": "^4.129.1"
   }
 }

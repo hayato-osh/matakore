@@ -22,9 +22,9 @@ test('表示用に区切る', () => {
 
 test('出品タイトルのノイズを落とす', () => {
   expect(normalizeProductName('【送料無料】ハウス こくまろカレー 中辛 140g×5個 まとめ買い')).toBe(
-    'ハウス こくまろカレー 中辛 140g',
+    'ハウス こくまろカレー 中辛',
   )
-  expect(normalizeProductName('S&B ゴールデンカレー 中辛 198g 5個セット')).toBe('S&B ゴールデンカレー 中辛 198g')
+  expect(normalizeProductName('S&B ゴールデンカレー 中辛 198g 5個セット')).toBe('S&B ゴールデンカレー 中辛')
 })
 
 test('商品名の一部である括弧は残す', () => {

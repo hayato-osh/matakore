@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "matakore",
+  "main": "./server/index.ts",
+  "compatibility_date": "2026-09-07",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // 1 Worker で PWA（静的アセット）と API を同一オリジンから配信する（§6.2）。
+  // /api/* だけ Worker のコードに回し、それ以外は dist/client の静的ファイル。
+  // 未知のパスは index.html に落とす（SPA）。assets.directory は Vite プラグインがビルド時に埋める。
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // 本番の入口はカスタムドメインだけ。workers.dev とプレビュー URL は Access の外側になるので閉じる
+  "workers_dev": false,
+  "preview_urls": false,
+
+  // 非機密の設定。機密（YAHOO_APP_ID / RAKUTEN_APP_ID）は wrangler secret put で入れる。
+  // ローカル開発では .dev.vars（.dev.vars.example をコピー）。
+  "vars": {
+    // Open Food Facts が要求する識別用 UA。連絡先を入れるのが作法
+    "OFF_USER_AGENT": "matakore/0.1 (https://github.com/hayato-osh/matakore)",
+    // Cloudflare Access（§6.3）。Zero Trust → Access → Applications で作ったアプリの値。
+    // TEAM_DOMAIN は <team>.cloudflareaccess.com、AUD はアプリの Application Audience (AUD) Tag
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  },
+
+  // 本番の配信先。DNS レコードと証明書は Cloudflare が Worker Custom Domain として自動で持つ。
+  "routes": [{ "pattern": "matakore.example.com", "custom_domain": true }],
+
+  // 自前共有マスタ（§4.2 の第2段）。過去に解決した JAN のスナップショットを持ち、外部API呼び出しを減らす。
+  // wrangler d1 create matakore で作った本番 DB。ローカル開発は .wrangler/state の別物を使う。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "matakore",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./migrations"
+    }
+  ],
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

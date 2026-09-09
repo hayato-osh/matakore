@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { IntentBadge, UnratedBadge } from '../components/IntentBadge'
+import ProductThumb from '../components/ProductThumb'
 import RelatedList from '../components/RelatedList'
 import { ScreenHeader } from '../components/ScreenHeader'
 import Button from '../components/ui/Button'
@@ -47,6 +48,7 @@ export default function VerdictScreen({ jan, nav }: { jan: string; nav: Nav }) {
           </>
         }
         onBack={nav.pop}
+        action={<ProductThumb src={product?.imageUrl} />}
       />
 
       <section className={styles.hero}>
