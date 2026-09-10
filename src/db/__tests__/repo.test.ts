@@ -104,6 +104,16 @@ test('評価CSV は商品名・カテゴリ・タグを join する', async () =
   expect(csv).toContain(',staple,')
 })
 
+test('CSV は数式として評価される値を文字列に倒す', async () => {
+  await seedFixture()
+  await upsertProduct({ jan: GOLDEN, name: '=HYPERLINK("http://evil","値引き")', categoryId: CURRY })
+  await saveReview(GOLDEN, { intent: 'yes', memo: '@SUM(A1:A9)', tags: [] })
+  const csv = await buildReviewsCsv()
+  expect(csv).toContain(`"'=HYPERLINK(""http://evil"",""値引き"")"`)
+  expect(csv).toContain(`'@SUM(A1:A9)`)
+  expect(csv).not.toMatch(/(^|,)=HYPERLINK/m)
+})
+
 test('完全バックアップは往復できる', async () => {
   await seedFixture()
   await saveReview(KOKUMARO, { intent: 'staple', memo: '常備', tags: [] })

@@ -46,3 +46,15 @@ export const SYNC_PAGE = 500
  * D1 の 1 行 1MB に半端に当たって失敗するより、入口で 400 にする。
  */
 export const SYNC_MAX_DATA_CHARS = 64_000
+
+/**
+ * 1リクエストの全行の合計（文字数）。上の2つを掛けると 500 × 64,000 = 3,200 万字まで通ってしまい、
+ * Worker のメモリ（128MB）に当たって 502 になる。実データは 500 行でも数 MB に届かない。
+ */
+export const SYNC_MAX_TOTAL_CHARS = 2_000_000
+
+/**
+ * content-length の上限（バイト）。上の合計に日本語の 3 バイト/字と JSON の骨組みぶんの余裕を足した値。
+ * body を読み切る前に 413 で落とすためのもので、本番の判定は SYNC_MAX_TOTAL_CHARS が行う。
+ */
+export const SYNC_MAX_BODY_BYTES = 8 * 1024 * 1024

@@ -1,6 +1,7 @@
 import type { RecordRow, RecordStore } from './records'
 import {
   SYNC_MAX_DATA_CHARS,
+  SYNC_MAX_TOTAL_CHARS,
   SYNC_PAGE,
   SYNC_TABLES,
   type SyncChange,
@@ -24,13 +25,18 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const primaryKeyOf = (tbl: SyncTable, row: Record<string, unknown>) =>
   tbl === 'purchases' || tbl === 'categories' ? row.id : row.jan
 
-/** 型の合わないものは 400 に倒す。D1 に変なものを書いてから困るより、入口で止める。 */
-export const parseSyncRequest = (body: unknown): SyncRequest | null => {
+/**
+ * 型の合わないものは 400 に倒す。D1 に変なものを書いてから困るより、入口で止める。
+ * 「大きすぎる」だけは 'too-large' として分けて返す。形の不正と同じ 400 にすると、
+ * クライアントは「送り方を変えれば通る」のか「何を送っても通らない」のかを区別できない。
+ */
+export const parseSyncRequest = (body: unknown): SyncRequest | null | 'too-large' => {
   if (!isRecord(body)) return null
   const { cursor, changes } = body
   if (typeof cursor !== 'number' || !Number.isInteger(cursor) || cursor < 0) return null
   if (!Array.isArray(changes) || changes.length > SYNC_PAGE) return null
   const out: SyncChange[] = []
+  let total = 0
   for (const c of changes) {
     if (!isRecord(c)) return null
     if (!isTable(c.tbl)) return null
@@ -38,7 +44,10 @@ export const parseSyncRequest = (body: unknown): SyncRequest | null => {
     if (!(c.data === null || isRecord(c.data))) return null
     if (c.data !== null) {
       if (primaryKeyOf(c.tbl, c.data) !== c.key) return null
-      if (JSON.stringify(c.data).length > SYNC_MAX_DATA_CHARS) return null
+      const size = JSON.stringify(c.data).length
+      if (size > SYNC_MAX_DATA_CHARS) return 'too-large'
+      total += size
+      if (total > SYNC_MAX_TOTAL_CHARS) return 'too-large'
     }
     if (typeof c.at !== 'number' || !Number.isFinite(c.at)) return null
     out.push({ tbl: c.tbl, key: c.key, data: c.data, at: c.at })

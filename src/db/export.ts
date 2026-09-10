@@ -29,9 +29,17 @@ export const buildBackup = async (): Promise<Backup> => {
   return { app: 'matakore', version: EXPORT_VERSION, exportedAt: Date.now(), products, purchases, reviews, categories }
 }
 
+/**
+ * 商品名は EC の出品タイトル由来＝第三者が書いた文字列で、メモも後から自分が何を書くか分からない。
+ * `=` `+` `-` `@` やタブ・CR で始まるセルは Excel / Google Sheets が数式として評価するので、
+ * ' を足して文字列に倒す（数式インジェクション）。
+ * 数値そのものは数式にならないので触らない（-100 が '-100 になると集計できなくなる）。
+ */
 const csvCell = (v: unknown) => {
   const s = v === undefined || v === null ? '' : String(v)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  const risky = /^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)
+  const safe = risky ? `'${s}` : s
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 const toCsv = (rows: unknown[][]) => `﻿${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`

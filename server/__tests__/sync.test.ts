@@ -66,7 +66,22 @@ test('リクエストの検証: 知らないテーブル・空のキー・上限
     cursor: 0,
     changes: [put('categories', 'a', { id: 'a' }, 1)],
   })
-  expect(parseSyncRequest({ cursor: 0, changes: [put('reviews', 'a', { jan: 'a', memo: 'x'.repeat(SYNC_MAX_DATA_CHARS) }, 1)] })).toBeNull()
+  // 大きすぎるのは形の不正（null）と分ける。クライアントは切って送り直せる
+  expect(parseSyncRequest({ cursor: 0, changes: [put('reviews', 'a', { jan: 'a', memo: 'x'.repeat(SYNC_MAX_DATA_CHARS) }, 1)] })).toBe('too-large')
+})
+
+test('1行ずつは上限内でも、合計が大きすぎるリクエストは弾く', () => {
+  // 1行 64,000 字 × 500 行を全部通すと 3,200 万字。Worker のメモリに当たる前に入口で止める
+  const fat = (i: number) => put('reviews', `j${i}`, { jan: `j${i}`, memo: 'x'.repeat(SYNC_MAX_DATA_CHARS - 100) }, 1)
+  const changes = Array.from({ length: SYNC_PAGE }, (_, i) => fat(i))
+  expect(parseSyncRequest({ cursor: 0, changes })).toBe('too-large')
+  // 実データの大きさ（1行あたり数 KB）なら 500 行でも通る
+  const normal = Array.from({ length: SYNC_PAGE }, (_, i) =>
+    put('reviews', `j${i}`, { jan: `j${i}`, intent: 'yes', memo: 'x'.repeat(120) }, 1),
+  )
+  const parsed = parseSyncRequest({ cursor: 0, changes: normal })
+  expect(parsed).not.toBe('too-large')
+  expect(parsed && parsed !== 'too-large' && parsed.changes.length).toBe(SYNC_PAGE)
 })
 
 test('端末Aが送った変更を端末Bが cursor 以降として受け取る。送った本人には返さない', async () => {

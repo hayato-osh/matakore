@@ -43,6 +43,7 @@ wrangler.example.jsonc  Worker の設定のひな形。assets（SPA）/ run_work
 wrangler.jsonc          ↑ をコピーして自分の値を入れたもの（git に入れない）
 migrations/             D1 スキーマ（products = 共有マスタ、misses = 未発見の記憶、records = 記録の控え）
 .dev.vars.example       ローカルの秘密のひな形（DEV_NO_AUTH / YAHOO_APP_ID / RAKUTEN_APP_ID）
+dist/client/_headers    静的アセットのセキュリティヘッダ。vite.config.ts が build のたびに生成する（手で置かない）
 .github/workflows/      CI（lint / typecheck / test / 生成物の差分 / build）。デプロイは自動化しない
 .github/renovate.json5  依存の更新（Renovate の GitHub App が読む）。週1・まとめ方・SHA 固定の維持
 worker-configuration.d.ts  `pnpm types` が生成する Env と Workers ランタイムの型（手で書かない）

@@ -9,7 +9,7 @@ import { offSource } from './sources/off'
 import { rakutenSource } from './sources/rakuten'
 import { yahooSource } from './sources/yahoo'
 import { buildBackup, parseSyncRequest, runSync, userIdOf, wipeRecords } from './sync'
-import type { Source } from './types'
+import { SYNC_MAX_BODY_BYTES, type Source } from './types'
 
 // Worker は薄いプロキシと同期に徹する（§6.2）。API キーはここから外に出ない。
 // 判定パスにはこの Worker を含めない。PWA はローカルの IndexedDB だけで判定し、
@@ -38,6 +38,27 @@ type AppEnv = { Bindings: Env; Variables: { jwtPayload?: AccessClaims } }
 const app = new Hono<AppEnv>()
 
 /**
+ * API の応答に必ず付けるヘッダ。応答は文書として解釈されないので、sniff も埋め込みも読み込みも許さない。
+ *
+ * c.header() ではなく出来上がった Response に後から付ける。c.header() は下の CSRF が返す 403 と、
+ * jwk ミドルウェアが投げる 401（HTTPException が自前の Response を持つ）に乗らない。
+ * 認証に失敗した応答こそ他人が触るものなので、そこだけ裸になるのは順序が逆になる。
+ */
+const secure = (res: Response) => {
+  res.headers.set('cache-control', 'no-store')
+  res.headers.set('x-content-type-options', 'nosniff')
+  res.headers.set('referrer-policy', 'no-referrer')
+  res.headers.set('content-security-policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+  return res
+}
+
+// 一番外側に置く。ここより内側で作られた応答は、正常系も 403 も 404 も必ずここを通って出る
+app.use('/api/*', async (c, next) => {
+  await next()
+  secure(c.res)
+})
+
+/**
  * CSRF 対策。認証がクッキーなので、他サイトのフォームから同期や全削除を送り込める余地を潰す。
  * ブラウザは他サイト発のリクエストに Sec-Fetch-Site（cross-site / same-site）を付け、フォーム送信には Origin も付く。
  * どちらも無いもの（curl 等）は、Access のクッキーが無ければどのみち 401 になる。
@@ -52,11 +73,20 @@ app.use('/api/*', async (c, next) => {
   return next()
 })
 
+/**
+ * DEV_NO_AUTH が効いてよいホスト名。ローカルと、`pnpm dev:host` で実機から見るときの
+ * プライベート IP・mDNS 名まで。これ以外では DEV_NO_AUTH を無視する。
+ */
+const LOCAL_HOST =
+  /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|[^.]+\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/
+
+const devBypass = (c: Context<AppEnv>) => c.env.DEV_NO_AUTH === '1' && LOCAL_HOST.test(new URL(c.req.url).hostname)
+
 app.use('/api/*', async (c, next) => {
-  c.header('cache-control', 'no-store')
   // ローカル開発（vite dev）の前には Access がいないので、.dev.vars でだけ検証を外す。
-  // wrangler.jsonc の vars には置かないこと（置くと本番でも外れる）
-  if (c.env.DEV_NO_AUTH === '1') return next()
+  // wrangler.jsonc の vars には置かないこと（置くと本番でも外れる）。
+  // 置かれてしまっても全公開にならないよう、ホスト名がローカルのときしか効かないようにする。
+  if (devBypass(c)) return next()
   // Access の設定が無いのは「誰でも通す」ではなく「誰も通さない」に倒す
   if (!c.env.ACCESS_TEAM_DOMAIN || !c.env.ACCESS_AUD) return c.json({ error: 'Access is not configured' }, 503)
   return accessJwt(c.env)(c, next)
@@ -112,7 +142,7 @@ app.get('/api/resolve/:jan', async (c) => {
 // ---- 差分同期（Phase 2）。記録の控えを D1 に置き、機種変更で消えないようにする。
 // 主体は Access の email。アプリ側にユーザーの概念は無く、ログインした本人の控えが自動で選ばれる。
 
-const userOf = (c: Context<AppEnv>) => userIdOf(c.get('jwtPayload'), c.env.DEV_NO_AUTH === '1')
+const userOf = (c: Context<AppEnv>) => userIdOf(c.get('jwtPayload'), devBypass(c))
 
 app.post('/api/sync', async (c) => {
   const user = userOf(c)
@@ -121,7 +151,13 @@ app.post('/api/sync', async (c) => {
   if (!c.req.header('content-type')?.toLowerCase().includes('application/json')) {
     return c.json({ error: 'expected application/json' }, 415)
   }
+  // 読み切ってから弾くと意味が無いので、申告された長さで先に落とす
+  if (Number(c.req.header('content-length')) > SYNC_MAX_BODY_BYTES) {
+    return c.json({ error: 'body too large' }, 413)
+  }
   const req = parseSyncRequest(await c.req.json().catch(() => null))
+  // 「送り方を変えれば通る」は 413。クライアントは切って送り直せる（src/lib/sync.ts の buildChanges）
+  if (req === 'too-large') return c.json({ error: 'changes too large' }, 413)
   if (!req) return c.json({ error: 'invalid sync request' }, 400)
   const res = await runSync(d1Records(c.env.DB), user, req)
   console.log(
@@ -149,11 +185,12 @@ app.delete('/api/sync', async (c) => {
 
 app.notFound((c) => c.json({ error: 'not found' }, 404))
 
+// 投げられた応答は上の use を通らずにここへ来るので、ヘッダはこちらでも付ける
 app.onError((e, c) => {
   // jwk ミドルウェアの 401 など、意図して投げた応答はそのまま返す
-  if (e instanceof HTTPException) return e.getResponse()
+  if (e instanceof HTTPException) return secure(e.getResponse())
   console.error(JSON.stringify({ event: 'unhandled', path: c.req.path, error: e.message }))
-  return c.json({ error: 'request failed' }, 502)
+  return secure(c.json({ error: 'request failed' }, 502))
 })
 
 export default app

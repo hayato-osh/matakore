@@ -1,5 +1,5 @@
 import type { Source } from '../types'
-import { clean, fetchJson } from './http'
+import { clean, cleanImageUrl, fetchJson } from './http'
 
 // 楽天市場 商品検索API。JAN 専用パラメータは無く keyword に JAN を入れる（§4.2 第4段）。
 // https://webservice.rakuten.co.jp/documentation/ichiba-item-search
@@ -24,8 +24,8 @@ export const rakutenSource = (appId: string): Source => async (jan) => {
   if (!item) return null
   const img = item.mediumImageUrls?.[0]
   return {
-    rawName: item.itemName!.trim(),
-    imageUrl: typeof img === 'string' ? clean(img) : clean(img?.imageUrl),
+    rawName: clean(item.itemName)!,
+    imageUrl: cleanImageUrl(typeof img === 'string' ? img : img?.imageUrl),
     source: 'rakuten',
   }
 }

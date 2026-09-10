@@ -1,5 +1,5 @@
 import type { Source } from '../types'
-import { clean, fetchJson } from './http'
+import { clean, cleanImageUrl, fetchJson } from './http'
 
 // Open Food Facts。オープンデータだが日本の食品カバレッジは薄い（§4.2 第5段、補助扱い）。
 // status=1 でも product_name が空で返ることがあるので、名前が無ければ未発見として扱う。
@@ -17,5 +17,5 @@ export const offSource = (userAgent: string): Source => async (jan) => {
   if (!name) return null
   // brands は "Nutella, Ferrero" のようにカンマ区切り。先頭だけをメーカーとして扱う
   const brand = clean(data.product.brands?.split(',')[0])
-  return { rawName: name, brand, imageUrl: clean(data.product.image_front_url), source: 'off' }
+  return { rawName: name, brand, imageUrl: cleanImageUrl(data.product.image_front_url), source: 'off' }
 }

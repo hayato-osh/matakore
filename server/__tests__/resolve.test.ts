@@ -179,3 +179,32 @@ test('HTTP エラーは throw する（呼び出し側が握る）', async () =>
   mockFetch({}, 500)
   await expect(offSource('ua')(JAN)).rejects.toThrow('500')
 })
+
+test('画像 URL は https 以外を落とす（入る先が <img src> なので）', async () => {
+  mockFetch({ hits: [{ name: 'X', janCode: JAN, image: { medium: 'http://img/m.jpg', small: 'https://img/s.jpg' } }] })
+  expect((await yahooSource('APP')(JAN))?.imageUrl).toBe('https://img/s.jpg')
+  mockFetch({ items: [{ itemName: 'X', mediumImageUrls: ['javascript:alert(1)'] }] })
+  expect((await rakutenSource('RK')(JAN))?.imageUrl).toBeUndefined()
+  mockFetch({ status: 1, product: { product_name: 'X', image_front_url: 'data:image/svg+xml,<svg/>' } })
+  expect((await offSource('ua')(JAN))?.imageUrl).toBeUndefined()
+})
+
+test('外部APIが返す文字列は長さで切る（D1 に焼いて以後ずっと配る値なので）', async () => {
+  mockFetch({ hits: [{ name: 'あ'.repeat(5000), janCode: JAN, brand: { name: 'い'.repeat(5000) } }] })
+  const r = await yahooSource('APP')(JAN)
+  expect(r?.rawName.length).toBe(200)
+  expect(r?.brand?.length).toBe(200)
+})
+
+test('大きすぎるレスポンスは読み切らずに throw する', async () => {
+  globalThis.fetch = (async () =>
+    new Response(
+      new ReadableStream({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(64 * 1024))
+        },
+      }),
+      { headers: { 'content-type': 'application/json' } },
+    )) as typeof fetch
+  await expect(offSource('ua')(JAN)).rejects.toThrow('exceeded')
+})

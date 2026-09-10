@@ -84,6 +84,37 @@ test('クッキー無し・改ざん・別 aud・期限切れは 401', async () 
 test('DEV_NO_AUTH=1 はローカル開発用の迂回', async () => {
   const res = await app.request('/api/health', {}, env({ DEV_NO_AUTH: '1' }))
   expect(res.status).toBe(200)
+  // dev:host で実機から見る導線（プライベート IP）も迂回できる
+  expect((await app.request('http://192.168.1.5/api/health', {}, env({ DEV_NO_AUTH: '1' }))).status).toBe(200)
+})
+
+test('DEV_NO_AUTH=1 が本番に置かれても、ローカル以外では効かない', async () => {
+  const e = env({ DEV_NO_AUTH: '1' })
+  expect((await app.request('https://matakore.example.com/api/health', {}, e)).status).toBe(401)
+  expect((await app.request('https://matakore.example.com/api/backup', {}, e)).status).toBe(401)
+  // 正しい JWT があれば通り、主体は dev ではなく Access の本人になる
+  const ok = await app.request('https://matakore.example.com/api/health', { headers: auth }, e)
+  expect(ok.status).toBe(200)
+  expect(await ok.json()).toMatchObject({ user: 'me@example.com' })
+})
+
+test('API の応答に sniff と埋め込みを止めるヘッダが付く（失敗した応答にも）', async () => {
+  const body = JSON.stringify({ cursor: 0, changes: [] })
+  const responses = await Promise.all([
+    app.request('/api/health', { headers: auth }, env()), // 200
+    app.request('/api/health', {}, env()), // 401（jwk が投げる）
+    app.request('/api/sync', { method: 'POST', headers: { ...auth, 'sec-fetch-site': 'cross-site' }, body }, env()), // 403
+    app.request('/api/health', {}, env({ ACCESS_AUD: '' })), // 503
+    app.request('/api/nope', { headers: auth }, env()), // 404
+  ])
+  expect(responses.map((r) => r.status)).toEqual([200, 401, 403, 503, 404])
+  // 認証に失敗した応答こそ他人が触るので、そこだけ裸にしない
+  for (const res of responses) {
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+  }
 })
 
 test('login は Access を通った後にアプリ（/）へ戻す。クッキー無しは 401', async () => {
@@ -147,6 +178,36 @@ test('他サイト発の POST / DELETE は 403（CSRF）。JSON でない POST �
   expect(same.status).toBe(200)
   // GET は対象外（Access のクッキーが Lax でも通る導線を塞がない）
   expect((await app.request('/api/health', { headers: { ...auth, 'sec-fetch-site': 'cross-site' } }, env())).status).toBe(200)
+})
+
+test('大きすぎる changes は 400 ではなく 413（クライアントが切って送り直せるように）', async () => {
+  const changes = [{ tbl: 'reviews', key: 'a', data: { jan: 'a', memo: 'x'.repeat(70_000) }, at: 1 }]
+  const res = await app.request(
+    '/api/sync',
+    { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ cursor: 0, changes }) },
+    env(),
+  )
+  expect(res.status).toBe(413)
+  // 形が不正なものは今まで通り 400。区別が付かないと「送り方を変えれば通る」のかが分からない
+  const bad = await app.request(
+    '/api/sync',
+    { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: '{"cursor":"x"}' },
+    env(),
+  )
+  expect(bad.status).toBe(400)
+})
+
+test('申告された body が大きすぎる sync は読まずに 413', async () => {
+  const res = await app.request(
+    '/api/sync',
+    {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json', 'content-length': String(64 * 1024 * 1024) },
+      body: JSON.stringify({ cursor: 0, changes: [] }),
+    },
+    env(),
+  )
+  expect(res.status).toBe(413)
 })
 
 test('backup はアプリのエクスポートと同じ形', async () => {

@@ -13,6 +13,10 @@ type SyncResponse = { cursor: number; changes: SyncChange[]; more: boolean }
 
 /** 1往復で運ぶ上限。サーバー側と同じ値 */
 export const SYNC_PAGE = 500
+/** 1往復で運ぶ中身の合計（文字数）。サーバー側と同じ値 */
+export const SYNC_MAX_TOTAL_CHARS = 2_000_000
+/** 1行の中身の上限（文字数）。サーバー側と同じ値 */
+export const SYNC_MAX_DATA_CHARS = 64_000
 /** 500件の JSON を電波の弱い場所で送ることもあるので、JAN 解決より長めに待つ */
 export const SYNC_TIMEOUT_MS = 20_000
 
@@ -39,18 +43,40 @@ const post = async (req: SyncRequest, fetchImpl: typeof fetch): Promise<SyncResp
   return r.body as SyncResponse
 }
 
-/** 未送信の行を、今の中身つきで組み立てる。行が無ければ削除として送る。 */
+/**
+ * 未送信の行を、今の中身つきで組み立てる。行が無ければ削除として送る。
+ *
+ * 1往復に載る合計を越えたらそこで切り、残りは次の往復に回す。切らずに投げるとサーバーが 413 を返し、
+ * 次も同じ 500 行を作って同じところで止まる＝設定画面にエラーが残ったまま自力で戻れなくなる。
+ * 返す sent は「実際に送る行」で、settle に渡すのはこちら。dirty をそのまま下ろすと、
+ * 送っていない行を未送信から消してしまう（＝控えに載らないまま消える）。
+ *
+ * 1行だけで上限を越える行は何度送っても通らないので、受信側（applyRemote）と同じように諦めて
+ * 未送信から下ろす。ローカルの記録は残るが、その行だけサーバーの控えには載らない。
+ */
 const buildChanges = (dirty: Outbox[]) =>
-  db.transaction('r', allTables(), () =>
-    Promise.all(
-      dirty.map(async (d): Promise<SyncChange> => ({
-        tbl: d.tbl,
-        key: d.key,
-        data: (await syncTable(d.tbl).get(d.key)) ?? null,
-        at: d.at,
-      })),
-    ),
-  )
+  db.transaction('r', allTables(), async () => {
+    const sent: Outbox[] = []
+    const changes: SyncChange[] = []
+    let total = 0
+    let oversized = 0
+    for (const d of dirty) {
+      const data = (await syncTable(d.tbl).get(d.key)) ?? null
+      const size = data === null ? 0 : JSON.stringify(data).length
+      if (size > SYNC_MAX_DATA_CHARS) {
+        oversized++
+        sent.push(d)
+        continue
+      }
+      // 1件も入らないまま切ると先へ進めない。1行は必ず載せる（1行の上限 < 合計の上限なので溢れない）
+      if (changes.length > 0 && total + size > SYNC_MAX_TOTAL_CHARS) break
+      total += size
+      sent.push(d)
+      changes.push({ tbl: d.tbl, key: d.key, data, at: d.at })
+    }
+    if (oversized) console.warn(JSON.stringify({ event: 'sync_oversized_rows', oversized }))
+    return { sent, changes }
+  })
 
 /**
  * サーバーから受け取った変更をローカルに書く。outbox には積まない（silently）。
@@ -138,12 +164,14 @@ const run = async (fetchImpl: typeof fetch): Promise<SyncOutcome> => {
     let cursor = meta?.cursor ?? (await initialPull(fetchImpl))
     for (;;) {
       const dirty = (await db.outbox.toArray()).slice(0, SYNC_PAGE)
-      const res = await post({ cursor, changes: await buildChanges(dirty) }, fetchImpl)
-      await settle(dirty)
+      const { sent, changes } = await buildChanges(dirty)
+      const res = await post({ cursor, changes }, fetchImpl)
+      await settle(sent)
       await applyRemote(res.changes, false)
       cursor = res.cursor
       await db.meta.put({ key: 'sync', cursor, syncedAt: Date.now() })
-      if (dirty.length < SYNC_PAGE && !res.more) return 'synced'
+      // 合計の上限で切ったとき（sent < dirty）は送り残しがあるので、もう1往復する
+      if (sent.length === dirty.length && dirty.length < SYNC_PAGE && !res.more) return 'synced'
     }
   } catch (e) {
     if (e instanceof LoginRequired) {

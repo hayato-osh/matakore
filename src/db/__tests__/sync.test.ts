@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, expect, test } from 'vitest'
-import { syncNow, wipeRemote, type SyncChange } from '../../lib/sync'
+import { SYNC_MAX_DATA_CHARS, SYNC_MAX_TOTAL_CHARS, syncNow, wipeRemote, type SyncChange } from '../../lib/sync'
 import { db, ensureSeeded, reseedForSync } from '../db'
 import { importBackup, wipeAll } from '../export'
 import { deleteProductCascade, recordPurchase, saveReview, upsertProduct } from '../repo'
@@ -31,6 +31,10 @@ const fakeServer = () => {
     if (init?.method !== 'POST') return new Response('{}', { status: 404 })
     const req = JSON.parse(String(init.body)) as { cursor: number; changes: SyncChange[] }
     calls.push(req)
+    // 本物と同じく、大きすぎるリクエストは中身を見ずに 413 で突き返す（1行でも、合計でも）
+    const sizes = req.changes.map((c) => (c.data ? JSON.stringify(c.data).length : 0))
+    const tooLarge = sizes.some((n) => n > SYNC_MAX_DATA_CHARS) || sizes.reduce((a, b) => a + b, 0) > SYNC_MAX_TOTAL_CHARS
+    if (tooLarge) return new Response('{"error":"changes too large"}', { status: 413 })
     for (const c of req.changes) put(c)
     const page = [...rows.values()].filter((r) => r.seq > req.cursor).sort((a, b) => a.seq - b.seq)
     const pushed = new Map(req.changes.map((c) => [`${c.tbl}/${c.key}`, c.at]))
@@ -229,4 +233,44 @@ test('初回同期がログイン切れでも設定画面に残り、次回は�
   expect(await syncNow(server.fetchImpl)).toBe('synced')
   expect(await db.categories.get('食品/直した')).toBeDefined()
   expect((await db.meta.get('sync'))?.error).toBeUndefined()
+})
+
+/** 大きい評価を n 件。1行ずつは上限内だが、合計は1往復に載らない */
+const seedBigReviews = async (n: number, chars: number) => {
+  const memo = 'x'.repeat(chars)
+  for (let i = 0; i < n; i++) {
+    await db.reviews.put({ jan: `bulk-${i}`, intent: 'yes', tags: [], history: [], memo, updatedAt: 1 })
+  }
+}
+
+test('合計の上限を越える未送信は、往復を分けて送り切る（同じ 500 行で詰まらない）', async () => {
+  const server = fakeServer()
+  await seedBigReviews(60, 40_000) // 240 万字。1往復の上限（200 万字）を越える
+  expect(await db.outbox.count()).toBe(60)
+
+  expect(await syncNow(server.fetchImpl)).toBe('synced')
+  expect(await db.outbox.count()).toBe(0)
+  // 1往復では載らないので分かれる。どの往復も上限を越えない＝413 を踏まない
+  expect(server.calls.length).toBeGreaterThan(1)
+  for (const c of server.calls) {
+    const chars = c.changes.reduce((n, ch) => n + (ch.data ? JSON.stringify(ch.data).length : 0), 0)
+    expect(chars).toBeLessThanOrEqual(SYNC_MAX_TOTAL_CHARS)
+  }
+  expect(server.get('reviews', 'bulk-0')?.data).toBeDefined()
+  expect(server.get('reviews', 'bulk-59')?.data).toBeDefined()
+  expect((await db.meta.get('sync'))?.error).toBeUndefined()
+})
+
+test('1行だけで上限を越える行は諦めて未送信から下ろす（そこで止まらない）', async () => {
+  const server = fakeServer()
+  await db.reviews.put({ jan: 'huge', intent: 'yes', tags: [], history: [], memo: 'x'.repeat(SYNC_MAX_DATA_CHARS + 1), updatedAt: 1 })
+  await upsertProduct({ jan: KOKUMARO, name: 'こくまろ', categoryId: CURRY })
+
+  expect(await syncNow(server.fetchImpl)).toBe('synced')
+  // 巨大な行はローカルに残るが、控えには載らない
+  expect(await db.reviews.get('huge')).toBeDefined()
+  expect(server.get('reviews', 'huge')).toBeUndefined()
+  // 後ろの行は普通に送られ、未送信は空になる（毎回ここで 413 になり続けない）
+  expect(server.get('products', KOKUMARO)?.data).toBeDefined()
+  expect(await db.outbox.count()).toBe(0)
 })

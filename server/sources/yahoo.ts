@@ -1,5 +1,5 @@
 import type { Source } from '../types'
-import { clean, fetchJson } from './http'
+import { clean, cleanImageUrl, fetchJson } from './http'
 
 // Yahoo!ショッピング 商品検索（v3）。JAN 指定検索に対応し、国内食品のカバレッジが最も広い（§4.2 第3段）。
 // https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html
@@ -26,9 +26,9 @@ export const yahooSource = (appId: string): Source => async (jan) => {
     hits.find((h) => h.janCode === jan) ??
     hits[0]
   return {
-    rawName: hit.name!.trim(),
+    rawName: clean(hit.name)!,
     brand: clean(hit.brand?.name),
-    imageUrl: clean(hit.image?.medium) ?? clean(hit.image?.small),
+    imageUrl: cleanImageUrl(hit.image?.medium) ?? cleanImageUrl(hit.image?.small),
     source: 'yahoo',
   }
 }
