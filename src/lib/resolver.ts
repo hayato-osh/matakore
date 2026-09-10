@@ -1,4 +1,5 @@
 import type { ProductSource } from '../db/types'
+import { apiFetch, errorOf, isOfflineError, relogin } from './api'
 
 // JAN → 商品マスタの解決（§4.2）。API キーはクライアントに置かず、必ず同一オリジンの Worker（/api）を経由する。
 // 認証は Cloudflare Access のクッキーに任せ、アプリはトークンを持たない（§6.3）。
@@ -21,9 +22,6 @@ export type ResolveResult =
   | { status: 'offline' }
   | { status: 'error'; message: string }
 
-/** PWA と Worker は同じオリジン。相対パスで呼ぶので配信先が変わっても設定は要らない。 */
-export const API_BASE = '/api'
-
 /** 登録画面でこれ以上待たせない上限。Worker 側の1ソース上限（5秒）より少し長い。 */
 export const RESOLVE_TIMEOUT_MS = 8000
 
@@ -38,20 +36,11 @@ type WireResponse =
   | { jan: string; found: false; cached: boolean }
   | { error: string }
 
-/**
- * 認証は Cloudflare Access（§6.3）。ブラウザが持つ CF_Authorization クッキーが同一オリジンの
- * /api にそのまま付くので、アプリ側にトークンは無い。セッションが切れていると Access がログイン画面へ
- * 302 を返すので、redirect: 'manual' で追わずに「ログインが要る」として扱う。
- */
 const request = async (path: string, fetchImpl: typeof fetch) => {
-  const res = await fetchImpl(`${API_BASE}${path}`, {
-    redirect: 'manual',
-    signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
-  })
-  if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { login: true } as const
-  const body = (await res.json().catch(() => ({}))) as WireResponse
-  if (!res.ok) throw new Error('error' in body && body.error ? body.error : `HTTP ${res.status}`)
-  return body
+  const r = await apiFetch(path, { timeoutMs: RESOLVE_TIMEOUT_MS }, fetchImpl)
+  if (r.login) return { login: true } as const
+  if (r.status < 200 || r.status >= 300) throw new Error(errorOf(r.body, r.status))
+  return r.body as WireResponse
 }
 
 export const resolveJan = async (jan: string, fetchImpl: typeof fetch = fetch): Promise<ResolveResult> => {
@@ -63,10 +52,8 @@ export const resolveJan = async (jan: string, fetchImpl: typeof fetch = fetch): 
     if (!body.found) return { status: 'notfound' }
     return { status: 'found', product: body.product, cached: body.cached }
   } catch (e) {
-    // fetch 自体の失敗（圏外・DNS・タイムアウト）は offline 扱い。原因の切り分けは設定画面の接続確認で行う
-    if (e instanceof TypeError || (e instanceof DOMException && e.name === 'TimeoutError')) {
-      return { status: 'offline' }
-    }
+    // fetch 自体の失敗（圏外・DNS・タイムアウト）は offline 扱い
+    if (isOfflineError(e)) return { status: 'offline' }
     return { status: 'error', message: e instanceof Error ? e.message : String(e) }
   }
 }
@@ -85,10 +72,4 @@ export const checkResolver = async (
   }
 }
 
-/**
- * Access のログインをやり直す。
- * 「/」へ遷移すると Service Worker が precache の index.html を返してネットワークに出ないため、
- * Access のログイン画面には辿り着けない。/api/* は SW の外なので、Worker の /api/login を踏ませる。
- * クッキーが無ければ Access がログイン画面へ飛ばし、通ると /api/login に戻ってきて Worker が「/」へ返す。
- */
-export const relogin = () => location.assign('/api/login')
+export { relogin }

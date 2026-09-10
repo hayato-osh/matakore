@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { ensureSeeded } from './db/db'
 import { startServiceWorker } from './lib/sw'
+import { startSync } from './lib/sync'
 import { applyTheme, getTheme } from './lib/theme'
 
 // 日本語は Zen Kaku Gothic New 一書体（400 / 700）だけ。1ウェイト約 0.9MB あるので増やさない。
@@ -17,7 +18,8 @@ import './styles/tokens.css'
 import './styles/global.css'
 
 applyTheme(getTheme())
-void ensureSeeded()
+// シードが終わってから同期を始める（初回接続はサーバーが知らない行だけを送るので、シード前に走ると順序が狂う）
+void ensureSeeded().then(startSync)
 startServiceWorker()
 
 createRoot(document.getElementById('root')!).render(

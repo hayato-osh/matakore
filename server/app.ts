@@ -1,17 +1,19 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { jwk } from 'hono/jwk'
 import { d1Cache } from './cache'
 import { isValidJan } from './jan'
+import { d1Records } from './records'
 import { resolveJan } from './resolve'
 import { offSource } from './sources/off'
 import { rakutenSource } from './sources/rakuten'
 import { yahooSource } from './sources/yahoo'
+import { buildBackup, parseSyncRequest, runSync, userIdOf, wipeRecords } from './sync'
 import type { Source } from './types'
 
-// Worker は薄いプロキシに徹する（§6.2）。API キーはここから外に出ない。
+// Worker は薄いプロキシと同期に徹する（§6.2）。API キーはここから外に出ない。
 // 判定パスにはこの Worker を含めない。PWA はローカルの IndexedDB だけで判定し、
-// ここを呼ぶのは「未知の JAN を登録するとき」だけ。
+// ここを呼ぶのは「未知の JAN を登録するとき」と「裏で記録の控えを D1 と合わせるとき」だけ。
 // /api/* 以外は静的アセット（wrangler.jsonc の assets）に流れるので、ここには来ない。
 
 const configuredSources = (env: Env): { sources: Source[]; names: string[] } => {
@@ -32,7 +34,8 @@ const configuredSources = (env: Env): { sources: Source[]; names: string[] } => 
 
 // jwtPayload は Access の JWT の claims（email など）。jwk ミドルウェアが積む
 type AccessClaims = { email?: string; sub?: string; exp?: number }
-const app = new Hono<{ Bindings: Env; Variables: { jwtPayload?: AccessClaims } }>()
+type AppEnv = { Bindings: Env; Variables: { jwtPayload?: AccessClaims } }
+const app = new Hono<AppEnv>()
 
 app.use('/api/*', async (c, next) => {
   c.header('cache-control', 'no-store')
@@ -91,13 +94,47 @@ app.get('/api/resolve/:jan', async (c) => {
   return c.json(result)
 })
 
+// ---- 差分同期（Phase 2）。記録の控えを D1 に置き、機種変更で消えないようにする。
+// 主体は Access の email。アプリ側にユーザーの概念は無く、ログインした本人の控えが自動で選ばれる。
+
+const userOf = (c: Context<AppEnv>) => userIdOf(c.get('jwtPayload'), c.env.DEV_NO_AUTH === '1')
+
+app.post('/api/sync', async (c) => {
+  const user = userOf(c)
+  if (!user) return c.json({ error: 'no identity' }, 401)
+  const req = parseSyncRequest(await c.req.json().catch(() => null))
+  if (!req) return c.json({ error: 'invalid sync request' }, 400)
+  const res = await runSync(d1Records(c.env.DB), user, req)
+  console.log(
+    JSON.stringify({ event: 'sync', user, pushed: req.changes.length, pulled: res.changes.length, cursor: res.cursor }),
+  )
+  return c.json(res)
+})
+
+/** D1 側の控えを、アプリのエクスポートと同じ形で丸ごと落とす。アプリが無くてもデータは取り出せる（§6.4）。 */
+app.get('/api/backup', async (c) => {
+  const user = userOf(c)
+  if (!user) return c.json({ error: 'no identity' }, 401)
+  c.header('content-disposition', `attachment; filename="matakore-backup.json"`)
+  return c.json(await buildBackup(d1Records(c.env.DB), user))
+})
+
+/** サーバーの控えを全部消す（墓標にする）。設定画面の「サーバーの控えも含めて削除」から。 */
+app.delete('/api/sync', async (c) => {
+  const user = userOf(c)
+  if (!user) return c.json({ error: 'no identity' }, 401)
+  const deleted = await wipeRecords(d1Records(c.env.DB), user)
+  console.log(JSON.stringify({ event: 'sync_wipe', user, deleted }))
+  return c.json({ ok: true, deleted })
+})
+
 app.notFound((c) => c.json({ error: 'not found' }, 404))
 
 app.onError((e, c) => {
   // bearerAuth の 401 など、意図して投げた応答はそのまま返す
   if (e instanceof HTTPException) return e.getResponse()
   console.error(JSON.stringify({ event: 'unhandled', path: c.req.path, error: e.message }))
-  return c.json({ error: 'resolve failed' }, 502)
+  return c.json({ error: 'request failed' }, 502)
 })
 
 export default app

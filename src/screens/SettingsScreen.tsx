@@ -9,15 +9,23 @@ import { db } from '../db/db'
 import { buildBackup, buildPurchasesCsv, buildReviewsCsv, download, importBackup, wipeAll } from '../db/export'
 import { stats } from '../db/repo'
 import { cx } from '../lib/cx'
-import { formatDate } from '../lib/format'
+import { formatDate, formatDateTime } from '../lib/format'
 import { checkResolver, relogin, SOURCE_LABEL } from '../lib/resolver'
 import { BUILD_ID, checkForUpdate } from '../lib/sw'
+import { syncNow, wipeRemote, type SyncOutcome } from '../lib/sync'
 import { getTheme, setTheme, THEMES, type Theme } from '../lib/theme'
 import layout from '../styles/layout.module.css'
 import text from '../styles/text.module.css'
 import styles from './SettingsScreen.module.css'
 
 const stamp = () => formatDate(Date.now())
+
+const SYNC_NOTE: Record<SyncOutcome, string> = {
+  synced: '同期できました',
+  offline: '圏外のため同期できません。電波が戻ったら自動で合わせます',
+  login: 'ログインが切れています。ログインし直してください',
+  error: '同期に失敗しました',
+}
 
 export default function SettingsScreen() {
   const s = useLiveQuery(() => stats(), [])
@@ -86,9 +94,37 @@ export default function SettingsScreen() {
     }
   }
 
+  // 同期の状態は DB の meta / outbox から読む。同期は裏で勝手に走るので、ここは覗き窓と手動の引き金だけ
+  const syncMeta = useLiveQuery(() => db.meta.get('sync'), [])
+  const pendingCount = useLiveQuery(() => db.outbox.count(), [])
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncNote, setSyncNote] = useState('')
+
+  const sync = async () => {
+    setSyncBusy(true)
+    setSyncNote('')
+    try {
+      setSyncNote(SYNC_NOTE[await syncNow()])
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
   const wipe = async () => {
-    if (!confirm('すべてのデータを削除します。先にエクスポートしましたか？')) return
+    if (!confirm('この端末のデータを削除します。先にエクスポートしましたか？')) return
+    if (!confirm('本当に削除します。サーバーの控えは残るので、次の同期で戻ります。')) return
+    await wipeAll()
+    location.reload()
+  }
+
+  const wipeEverything = async () => {
+    if (!confirm('サーバーの控えも含めて、すべてのデータを削除します。先にエクスポートしましたか？')) return
     if (!confirm('本当に削除します。元に戻せません。')) return
+    const r = await wipeRemote()
+    if (!r.ok) {
+      setMessage(`サーバーの控えを消せませんでした: ${r.message}`)
+      return
+    }
     await wipeAll()
     location.reload()
   }
@@ -155,6 +191,38 @@ export default function SettingsScreen() {
       </section>
 
       <section className={styles.card}>
+        <SectionTitle>同期</SectionTitle>
+        <p className={cx(text.muted, text.small)}>
+          記録の控えを同じ Worker の D1 に置く。書き込みの少し後・アプリに戻ったとき・電波が戻ったときに裏で合わせる。
+          機種変更したら、新しい端末でログインして開くだけで戻る。判定はこれが無くても動く。
+        </p>
+        <dl className={styles.stats}>
+          <div>
+            <dt>未送信</dt>
+            <dd>{pendingCount ?? '-'}</dd>
+          </div>
+          <div className={styles.wide}>
+            <dt>最終同期</dt>
+            <dd className={styles.when}>
+              {syncMeta?.syncedAt ? formatDateTime(syncMeta.syncedAt) : syncMeta ? '受信のみ' : 'まだ'}
+            </dd>
+          </div>
+        </dl>
+        <div className={layout.actions}>
+          <Button onClick={() => void sync()} disabled={syncBusy}>
+            {syncBusy ? '同期中…' : '今すぐ同期'}
+          </Button>
+          {syncMeta?.error?.includes('ログイン') && (
+            <Button variant="primary" onClick={relogin}>
+              ログインし直す
+            </Button>
+          )}
+        </div>
+        {syncNote && <p className={cx(text.small, text.muted)}>{syncNote}</p>}
+        {!syncNote && syncMeta?.error && <p className={text.error}>前回: {syncMeta.error}</p>}
+      </section>
+
+      <section className={styles.card}>
         <SectionTitle>エクスポート</SectionTitle>
         <div className={layout.stack}>
           <Button onClick={() => void exportAll()}>完全バックアップ（JSON）</Button>
@@ -196,9 +264,17 @@ export default function SettingsScreen() {
 
       <section className={styles.card}>
         <SectionTitle>危険な操作</SectionTitle>
-        <Button variant="danger" onClick={() => void wipe()}>
-          すべてのデータを削除
-        </Button>
+        <div className={layout.stack}>
+          <Button variant="danger" onClick={() => void wipe()}>
+            この端末のデータを削除
+          </Button>
+          <Button variant="danger" onClick={() => void wipeEverything()}>
+            サーバーの控えも含めて削除
+          </Button>
+        </div>
+        <p className={cx(text.muted, text.small)}>
+          上はこの端末だけ。サーバーの控えが次の同期で戻る。下は控えごと消す（別の端末にも削除が伝わる）。
+        </p>
       </section>
 
       <section className={styles.card}>
@@ -212,7 +288,7 @@ export default function SettingsScreen() {
       </section>
 
       <p className={cx(text.muted, text.small, styles.version)}>
-        matakore — Phase 1（JAN 解決は Workers 経由・判定はローカル完結）
+        matakore — Phase 2（D1 に控えを同期・判定はローカル完結）
       </p>
     </Screen>
   )

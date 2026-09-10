@@ -7,6 +7,7 @@ const emptyD1 = () => {
     bind: () => stmt,
     first: async () => null,
     run: async () => ({}),
+    all: async () => ({ results: [] }),
   }
   return { prepare: () => stmt, batch: async () => [] } as unknown as D1Database
 }
@@ -117,6 +118,26 @@ test('全ソースが落ちたら 502（「無い」と「分からない」を�
   mockFetch(access.jwks, () => new Response('', { status: 500 }))
   const res = await app.request('/api/resolve/3017620422003', { headers: auth }, env())
   expect(res.status).toBe(502)
+})
+
+test('sync は Access の本人でだけ動き、形の合わない body は 400', async () => {
+  const body = JSON.stringify({ cursor: 0, changes: [] })
+  const post = (init: RequestInit, e = env()) =>
+    app.request('/api/sync', { method: 'POST', headers: { ...(init.headers ?? {}), 'content-type': 'application/json' }, ...init }, e)
+  expect((await post({ body })).status).toBe(401)
+  const ok = await post({ body, headers: auth })
+  expect(ok.status).toBe(200)
+  expect(await ok.json()).toEqual({ cursor: 0, changes: [], more: false })
+  expect((await post({ body: '{"cursor":"x"}', headers: auth })).status).toBe(400)
+  expect((await post({ body: 'not json', headers: auth })).status).toBe(400)
+  // ローカル開発では固定ユーザー dev として動く
+  expect((await post({ body }, env({ DEV_NO_AUTH: '1' }))).status).toBe(200)
+})
+
+test('backup はアプリのエクスポートと同じ形', async () => {
+  const res = await app.request('/api/backup', { headers: auth }, env())
+  expect(res.status).toBe(200)
+  expect(await res.json()).toMatchObject({ app: 'matakore', version: 1, products: [], purchases: [], reviews: [], categories: [] })
 })
 
 test('/api 以外の未知のパスは 404 JSON', async () => {

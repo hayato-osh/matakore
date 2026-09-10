@@ -4,6 +4,12 @@ export const formatDate = (ts: number) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+export const formatDateTime = (ts: number) => {
+  const d = new Date(ts)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${formatDate(ts)} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 const DAY = 24 * 60 * 60 * 1000
 
 export const relativeDays = (ts: number, now = Date.now()) => {

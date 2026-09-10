@@ -1,5 +1,6 @@
 import { formatDate } from '../lib/format'
 import { db } from './db'
+import { silently } from './outbox'
 import type { Category, Product, Purchase, Review } from './types'
 
 // 数年かけて貯める前提のデータなので、JSON / CSV への完全エクスポートを最初のリリースに含める（§6.4）。
@@ -128,8 +129,21 @@ export const importBackup = async (json: string): Promise<ImportResult> => {
   }
 }
 
+/**
+ * この端末のデータを全部消す。サーバーの控えには触らない（同期に載せない）ので、
+ * 次の同期で控えがそのまま戻ってくる。控えごと消したいときは先に lib/sync.ts の wipeRemote を呼ぶ。
+ * 同期の状態も消すので、次回は初回接続としてサーバーから全部受け取り直す。
+ */
 export const wipeAll = async () => {
-  await db.transaction('rw', db.products, db.purchases, db.reviews, db.categories, async () => {
-    await Promise.all([db.products.clear(), db.purchases.clear(), db.reviews.clear(), db.categories.clear()])
+  await db.transaction('rw', [db.products, db.purchases, db.reviews, db.categories, db.outbox, db.meta], async (tx) => {
+    silently(tx)
+    await Promise.all([
+      db.products.clear(),
+      db.purchases.clear(),
+      db.reviews.clear(),
+      db.categories.clear(),
+      db.outbox.clear(),
+      db.meta.clear(),
+    ])
   })
 }

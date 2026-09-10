@@ -3,10 +3,11 @@
 スーパーの棚の前でバーコードを読むと「また買うか」が3秒で分かる、個人用の食品評価データベース。
 設計の意図と背景は [`DESIGN.md`](./DESIGN.md)、実装時の制約は [`CLAUDE.md`](./CLAUDE.md) にある。
 
-現在の実装範囲は **Phase 1**（`DESIGN.md` §8）。
+現在の実装範囲は **Phase 2**（`DESIGN.md` §8）。
 スキャン → 判定表示までは外部API接続なしで完結し、未知の JAN だけ同一オリジンの `/api` 経由で
 Yahoo!ショッピング／楽天市場／Open Food Facts から商品名を引く。API が落ちていても・圏外でも
-Phase 0 の動線（手入力）にそのまま落ちる。
+Phase 0 の動線（手入力）にそのまま落ちる。全記録の控えは裏で同じ Worker の D1 と差分同期しており、
+機種変更しても新しい端末でログインして開けば戻る。
 
 ## 構成
 
@@ -22,11 +23,12 @@ Phase 0 の動線（手入力）にそのまま落ちる。
   /api/*       → │ Worker（server/、Hono）                  │  run_worker_first: ["/api/*"]
                  │   Access の JWT（CF_Authorization）検証   │  API キーはここに隔離
                  │   /api/health  /api/resolve/:jan         │
-                 │   D1（共有マスタ・未発見の記憶）           │
+                 │   /api/sync    /api/backup               │
+                 │   D1（共有マスタ・未発見の記憶・記録の控え）│
                  └──────────────────────────────────────┘
 ```
 
-- 判定は IndexedDB だけで完結する。`/api` を呼ぶのは未知の JAN を登録するときだけ。
+- 判定は IndexedDB だけで完結する。`/api` を呼ぶのは未知の JAN を登録するときと、裏で記録の控えを D1 と合わせるときだけ。
 - 同一オリジンなので CORS も API の URL 設定も無い。認証は Cloudflare Access のクッキーなので、アプリ側に入れるものは何も無い。
 - 開発は `@cloudflare/vite-plugin` が Worker を Vite の中で動かすので、`pnpm dev` 一発で `/api` まで動く。
 - ビルドは `dist/client`（静的）と `dist/matakore`（Worker + 生成済み `wrangler.json`）に分かれ、
@@ -79,6 +81,8 @@ LAN 経由で iPhone から開く場合は HTTPS が必須なので上のコマ�
 2. **判定画面** で「買った」を押すと購入イベントが1件増える
 3. 食べたあと **未評価** タブから1タップで評価する（`◎ 定番` / `○ また買う` / `△ 微妙` / `✕ もういい`）
 4. **設定** タブから JSON / CSV でいつでも全部持ち出せる
+5. 記録は裏で D1 に同期される（書き込みの少し後・アプリに戻ったとき・電波が戻ったとき）。
+   機種変更したら新しい端末でログインして開くだけ。設定タブに未送信件数と最終同期が出る
 
 ## API
 
@@ -87,11 +91,31 @@ GET /api/health           → { ok, sources: ['yahoo','rakuten','off'], user }
 GET /api/resolve/:jan     → { jan, found: true, product: { rawName, brand?, imageUrl?, source, fetchedAt }, cached }
                           | { jan, found: false, cached }
     ?refresh=1            キャッシュを飛ばして取り直す
+
+POST /api/sync            { cursor, changes: [{ tbl, key, data | null, at }] }
+                          → { cursor, changes: [...], more }
+GET  /api/backup          → アプリのエクスポートと同じ形の JSON（アプリ無しでも取り出せる）
+DELETE /api/sync          → サーバーの控えを全部墓標にする（別の端末にも削除が伝わる）
 ```
 
 解決のカスケード（§4.2）: D1 の共有マスタ → Yahoo! → 楽天 → OFF。外部3ソースは優先順を保ったまま
 並列に叩き、優先順に見て最初に当たったものを返す（上位が当たれば下位は待たない）。
 見つからなかった JAN も 7 日間覚えておくが、どれかのソースがタイムアウトした回の「未発見」は覚えない。
+
+### 差分同期（Phase 2）
+
+`records`（D1）にユーザーの全記録（products / purchases / reviews / categories）を JSON のまま置く。
+主体は Access の email。1往復で「未送信の変更を送る → cursor より後の変更を受け取る」の両方をやる。
+
+- クライアント側は Dexie のミドルウェア（`src/db/outbox.ts`）が4テーブルへの書き込みを横取りし、
+  同じトランザクションで `outbox` に (tbl, key) を積む。`repo.ts` を通らない書き込み（カテゴリ追加・インポート）も漏れない。
+  中身は積まず送るときに現在の行を読むので、同じ行を何度直しても1件で済む。行が無ければ削除として送る
+- 衝突は「新しい方が勝つ」（`at` = 端末での変更時刻）。負けた側にはサーバーの版を返して上書きさせる。
+  未来の時刻は受け付けない（時計の進んだ端末に永遠に勝たせない）
+- 削除は行を消さず `data = NULL` の墓標にする。`seq` はユーザー内で単調増加し、これが cursor になる
+- 初回接続はサーバーが正。全部受け取ってから、サーバーが知らない行だけを送る。
+  新しい端末のカテゴリのシードが、古い端末で消したカテゴリを蘇らせないため
+- 同期は判定パスに一切関わらない。圏外・ログイン切れ・Worker 停止のどれでも、何も止めずに結果だけを設定画面に残す
 
 ## 認証（Cloudflare Access）
 
@@ -125,7 +149,7 @@ D1 `matakore` は作成済みで、その ID が `wrangler.jsonc` に入って�
 ```bash
 npx wrangler login
 pnpm deploy                              # build して wrangler deploy。ルートとカスタムドメインもここで同期される
-pnpm migrate:remote                      # migrations/ に追加があったとき
+pnpm migrate:remote                      # migrations/ に追加があったとき（Phase 2 の records テーブルはここで作る）
 npx wrangler secret put YAHOO_APP_ID     # https://e.developer.yahoo.co.jp/ の Client ID
 npx wrangler secret put RAKUTEN_APP_ID   # https://webservice.rakuten.co.jp/ のアプリID
 ```
@@ -155,30 +179,35 @@ Access の `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` を `wrangler.jsonc` に書き換
 
 ```
 wrangler.jsonc          Worker の設定。assets（SPA）/ run_worker_first["/api/*"] / D1 / Access の vars / workers_dev: false
-migrations/             D1 スキーマ（products = 共有マスタ、misses = 未発見の記憶）
+migrations/             D1 スキーマ（products = 共有マスタ、misses = 未発見の記憶、records = 記録の控え）
 .dev.vars.example       ローカルの秘密のひな形（DEV_NO_AUTH / YAHOO_APP_ID / RAKUTEN_APP_ID）
 worker-configuration.d.ts  `pnpm types` が生成する Env と Workers ランタイムの型（手で書かない）
 
 server/                 Cloudflare Worker（DOM 無し。tsconfig.worker.json）
 ├── index.ts            fetch ハンドラのエクスポート。Cron を足すならここに scheduled を並べる
-├── app.ts              Hono。/api/* の Access JWT 検証・/health・/resolve/:jan・JSON エラー
+├── app.ts              Hono。/api/* の Access JWT 検証・/health・/resolve/:jan・/sync・/backup・JSON エラー
 ├── resolve.ts          カスケード本体（キャッシュ → 並列ソース → 保存）
 ├── cache.ts            D1 の読み書き（テストでは in-memory に差し替え）
+├── sync.ts             差分同期の本体（検証・新旧比較・ページング・墓標・バックアップの組み立て）
+├── records.ts          records テーブルの読み書き（テストでは in-memory に差し替え）
 ├── sources/            yahoo / rakuten / off の各アダプタと共通の fetchJson（5秒で切る）
 ├── jan.ts              チェックディジット検証（不正な JAN で外部APIを叩かない）
-└── types.ts            PWA 側 src/lib/resolver.ts と対になる契約
+└── types.ts            PWA 側 src/lib/resolver.ts / src/lib/sync.ts と対になる契約
 
 src/                    PWA
 ├── db/
 │   ├── types.ts        Product / Purchase / Review / Category（§5 のデータモデル）
 │   ├── db.ts           Dexie スキーマ。全件をここに持ち、判定は完全にローカルで閉じる
+│   ├── outbox.ts       同期用ミドルウェア。4テーブルへの書き込みを未送信（outbox）に積む
 │   ├── categories.ts   2階層固定カテゴリのシード（約60件）
 │   ├── repo.ts         判定ビューの組み立て、未評価キュー、保存系
 │   └── export.ts       JSON / CSV エクスポートとインポート（§6.4）
 ├── lib/
 │   ├── scanner.ts      BarcodeDetector → zxing-wasm フォールバック
 │   ├── jan.ts          EAN-13 / EAN-8 のチェックディジット検証
+│   ├── api.ts          /api を呼ぶ共通部分（Access のログイン切れ検出・圏外判定）
 │   ├── resolver.ts     /api/resolve/:jan を呼ぶ。登録画面からしか呼ばない
+│   ├── sync.ts         /api/sync との差分同期。起動時・書き込み後・復帰時・電波復帰時に裏で走る
 │   ├── classify.ts     商品名キーワード → カテゴリ提案（確定はユーザーの1タップ）
 │   ├── normalize.ts    出品タイトルのノイズ除去（§4.2）
 │   ├── feedback.ts     検出成功の振動と効果音
@@ -226,9 +255,8 @@ src/                    PWA
 
 ## まだ無いもの
 
-`DESIGN.md` §8 の Phase 2 以降。
+`DESIGN.md` §8 の Phase 3 以降。
 
-- D1 との差分同期（`/api/sync`）、機種変更で消えないバックアップ
-- 夜間バッチ（LLM によるカテゴリ補完、傾向分析の事前計算）
+- 夜間バッチ（Cron）。LLM によるカテゴリ補完、傾向分析の事前計算。回す対象がまだ無いので置いていない
 - 集計ダッシュボード、LLM 嗜好プロファイル、類似商品推薦
   （集計は記録100件、プロファイルは300件、推薦は500件が着手ライン）

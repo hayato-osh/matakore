@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 現状
 
-`DESIGN.md` §8 の **Phase 1 まで実装済み**。
-Phase 0（スキャン → 手入力 → ローカル保存 → 判定表示）に加えて、未知の JAN を
-`/api/resolve/:jan` 経由で Yahoo!／楽天／Open Food Facts から解決し、
-商品名・メーカー・画像を登録画面に自動で流し込む。キーワードによるカテゴリ提案（1タップ承認）も入っている。
-D1 との差分同期・Cron（Phase 2 以降）は未実装。判定は引き続き完全にローカル完結。
+`DESIGN.md` §8 の **Phase 2 まで実装済み**。
+Phase 0（スキャン → 手入力 → ローカル保存 → 判定表示）、Phase 1（未知の JAN を
+`/api/resolve/:jan` 経由で Yahoo!／楽天／Open Food Facts から解決、カテゴリ提案の1タップ承認）に加えて、
+Phase 2 として全記録の控えを `/api/sync` で D1 と差分同期する（機種変更で消えない）。
+Cron（夜間バッチ）はまだ無い。回す対象（LLM 補完・傾向分析）が Phase 3 以降のため。判定は引き続き完全にローカル完結。
 
 **デプロイ単位は Cloudflare Worker 1本。** PWA（静的アセット）と API（Hono）を同一オリジンから配信する。
 `wrangler.jsonc` がルートにあり、`server/` が Worker、`src/` が PWA。`@cloudflare/vite-plugin` で
@@ -32,7 +32,7 @@ pnpm typecheck        # tsc -b（app / node / worker の3プロジェクト）
 pnpm types            # wrangler.jsonc か .dev.vars のキーを変えたら worker-configuration.d.ts を再生成
 ```
 
-コードの地図は `README.md` を見ること。D1 同期（`/api/sync`）と Cron はまだ1行も存在しない。
+コードの地図は `README.md` を見ること。Cron はまだ1行も存在しない。
 
 ## プロダクトの核
 
@@ -56,6 +56,16 @@ pnpm types            # wrangler.jsonc か .dev.vars のキーを変えたら wo
   JWKS で検証する。`workers_dev` と `preview_urls` は Access の外なので閉じたまま。ローカルは `.dev.vars` の
   `DEV_NO_AUTH=1` でだけ検証を外す（`wrangler.jsonc` の vars に置かない）。
 - **`resolveJan` を呼んでいいのは登録画面だけ**。判定画面・`getVerdict` から呼ぶと §6.1 が崩れる。
+- **同期は裏で勝手に走り、何も止めない**（`src/lib/sync.ts`）。判定パスから `syncNow` を呼ばない・待たない。
+  圏外・ログイン切れ・Worker 停止のどれでも結果を設定画面に残すだけ。
+- **同期対象の4テーブル（products / purchases / reviews / categories）への書き込みは Dexie のミドルウェア
+  （`src/db/outbox.ts`）が自動で未送信に積む**。手で積まない。逆に同期に載せたくない書き込み
+  （サーバーから受け取った変更・カテゴリのシード・端末だけの全削除）は `silently(tx)` を付けたトランザクションで行う。
+  外すと受け取った変更を送り返して無限に回る。
+- **ミドルウェアの中で `async/await` を使わない**。Dexie は Promise の連鎖からトランザクションの文脈を辿るので、
+  ネイティブの await を挟むと下層（hooks）が文脈を見失う。`.then` で繋ぐ。
+- **サーバーの控えの削除は墓標**（`data = NULL`）。行を物理削除すると `seq` が振り直されて別端末が取りこぼす。
+- **初回接続はサーバーが正**。ローカルはサーバーが知らない行だけを送る。新しい端末のシードが古い端末で消したものを蘇らせないため。
 - **Worker のルートは `/api/*` に閉じる**（`wrangler.jsonc` の `run_worker_first`）。それ以外のパスは静的アセットと
   SPA フォールバックに流れる。Service Worker 側も `/api/` を `navigateFallbackDenylist` で除外している。
 - **`server/` は DOM 無し**（`tsconfig.worker.json` の `types: []`）。`src/` と `server/` で共有したい純粋関数は
@@ -93,6 +103,6 @@ pnpm types            # wrangler.jsonc か .dev.vars のキーを変えたら wo
 
 ## 実装順序
 
-`DESIGN.md` §8 のロードマップに従う。Phase 0 を外部API抜きで切ったのは、API カバレッジという最も不確実な要素をコア体験の検証から切り離すため。Phase 1 で JAN 解決を足した今も、**Worker が落ちていても・圏外でも Phase 0 の動線がそのまま成立する**ことを崩さない（解決失敗は全部「手入力に落ちる」だけ）。次は Phase 2（D1 同期・機種変更で消えない）。
+`DESIGN.md` §8 のロードマップに従う。Phase 0 を外部API抜きで切ったのは、API カバレッジという最も不確実な要素をコア体験の検証から切り離すため。Phase 1 で JAN 解決を足した今も、**Worker が落ちていても・圏外でも Phase 0 の動線がそのまま成立する**ことを崩さない（解決失敗は全部「手入力に落ちる」だけ）。次は Phase 3（集計ダッシュボード・タグ分析。記録100件が着手ライン）。
 
 推薦機能（§7）はデータが貯まるまで着手しない（集計は100件〜、LLM 嗜好プロファイルは300件〜、類似商品推薦は500件〜）。

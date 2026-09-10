@@ -30,6 +30,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+.wide {
+  grid-column: span 3;
+}
+
+/* 日時は数値ほど大きくしない。読むのは「いつ」であって「いくつ」ではない */
+.stats .when {
+  font-size: 15px;
+  line-height: 2;
+}
+
 .version {
   text-align: center;
   margin-top: 6px;
