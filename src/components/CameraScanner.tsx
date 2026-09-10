@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { cx } from '../lib/cx'
 import { scanFeedback } from '../lib/feedback'
 import { isValidJan, normalizeJan } from '../lib/jan'
-import { getScanner, type ScanEngine } from '../lib/scanner'
+import { getScanner, type ScanEngine, type Scanner } from '../lib/scanner'
 import styles from './CameraScanner.module.css'
 
 type Status = 'starting' | 'running' | 'error'
@@ -72,7 +72,17 @@ export default function CameraScanner({ onDetect }: { onDetect: (jan: string) =>
       const caps = track?.getCapabilities?.() as { torch?: boolean } | undefined
       if (caps?.torch) setTorch({ on: false, available: true })
 
-      const scanner = await getScanner()
+      // wasm の取得に失敗する（SW に載る前に圏外になった等）と、ここで固まって「起動中…」のままになる
+      let scanner: Scanner
+      try {
+        scanner = await getScanner()
+      } catch {
+        if (cancelled) return
+        stream.getTracks().forEach((t) => t.stop())
+        setStatus('error')
+        setError('バーコード読み取りを初期化できませんでした。電波のある場所で開き直すか、下のJAN手入力を使ってください。')
+        return
+      }
       if (cancelled) return
       setEngine(scanner.engine)
       setStatus('running')

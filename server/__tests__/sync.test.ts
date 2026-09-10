@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest'
 import type { RecordRow, RecordStore } from '../records'
 import { buildBackup, parseSyncRequest, runSync, userIdOf, wipeRecords } from '../sync'
-import { SYNC_PAGE, type SyncChange } from '../types'
+import { SYNC_MAX_DATA_CHARS, SYNC_PAGE, type SyncChange } from '../types'
 
 // D1 の records と同じ意味論を in-memory で。seq はユーザー内で単調増加、古い変更は捨てる。
 const memoryStore = () => {
@@ -59,6 +59,14 @@ test('リクエストの検証: 知らないテーブル・空のキー・上限
     cursor: 0,
     changes: [del('reviews', 'a', 1)],
   })
+  // key と中身の主キーが食い違う行（墓標が効かなくなる）と、大きすぎる行は弾く
+  expect(parseSyncRequest({ cursor: 0, changes: [put('reviews', 'a', { jan: 'b' }, 1)] })).toBeNull()
+  expect(parseSyncRequest({ cursor: 0, changes: [put('purchases', 'a', { jan: 'a' }, 1)] })).toBeNull()
+  expect(parseSyncRequest({ cursor: 0, changes: [put('categories', 'a', { id: 'a' }, 1)] })).toEqual({
+    cursor: 0,
+    changes: [put('categories', 'a', { id: 'a' }, 1)],
+  })
+  expect(parseSyncRequest({ cursor: 0, changes: [put('reviews', 'a', { jan: 'a', memo: 'x'.repeat(SYNC_MAX_DATA_CHARS) }, 1)] })).toBeNull()
 })
 
 test('端末Aが送った変更を端末Bが cursor 以降として受け取る。送った本人には返さない', async () => {

@@ -37,6 +37,21 @@ type AccessClaims = { email?: string; sub?: string; exp?: number }
 type AppEnv = { Bindings: Env; Variables: { jwtPayload?: AccessClaims } }
 const app = new Hono<AppEnv>()
 
+/**
+ * CSRF 対策。認証がクッキーなので、他サイトのフォームから同期や全削除を送り込める余地を潰す。
+ * ブラウザは他サイト発のリクエストに Sec-Fetch-Site（cross-site / same-site）を付け、フォーム送信には Origin も付く。
+ * どちらも無いもの（curl 等）は、Access のクッキーが無ければどのみち 401 になる。
+ */
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+app.use('/api/*', async (c, next) => {
+  if (!MUTATING.has(c.req.method)) return next()
+  const site = c.req.header('sec-fetch-site')
+  if (site && site !== 'same-origin' && site !== 'none') return c.json({ error: 'cross-site request' }, 403)
+  const origin = c.req.header('origin')
+  if (origin && origin !== new URL(c.req.url).origin) return c.json({ error: 'cross-site request' }, 403)
+  return next()
+})
+
 app.use('/api/*', async (c, next) => {
   c.header('cache-control', 'no-store')
   // ローカル開発（vite dev）の前には Access がいないので、.dev.vars でだけ検証を外す。
@@ -102,6 +117,10 @@ const userOf = (c: Context<AppEnv>) => userIdOf(c.get('jwtPayload'), c.env.DEV_N
 app.post('/api/sync', async (c) => {
   const user = userOf(c)
   if (!user) return c.json({ error: 'no identity' }, 401)
+  // フォーム（text/plain）で JSON を偽装する CSRF の経路も、ここで閉じる
+  if (!c.req.header('content-type')?.toLowerCase().includes('application/json')) {
+    return c.json({ error: 'expected application/json' }, 415)
+  }
   const req = parseSyncRequest(await c.req.json().catch(() => null))
   if (!req) return c.json({ error: 'invalid sync request' }, 400)
   const res = await runSync(d1Records(c.env.DB), user, req)
@@ -131,7 +150,7 @@ app.delete('/api/sync', async (c) => {
 app.notFound((c) => c.json({ error: 'not found' }, 404))
 
 app.onError((e, c) => {
-  // bearerAuth の 401 など、意図して投げた応答はそのまま返す
+  // jwk ミドルウェアの 401 など、意図して投げた応答はそのまま返す
   if (e instanceof HTTPException) return e.getResponse()
   console.error(JSON.stringify({ event: 'unhandled', path: c.req.path, error: e.message }))
   return c.json({ error: 'request failed' }, 502)

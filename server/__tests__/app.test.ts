@@ -123,7 +123,7 @@ test('全ソースが落ちたら 502（「無い」と「分からない」を�
 test('sync は Access の本人でだけ動き、形の合わない body は 400', async () => {
   const body = JSON.stringify({ cursor: 0, changes: [] })
   const post = (init: RequestInit, e = env()) =>
-    app.request('/api/sync', { method: 'POST', headers: { ...(init.headers ?? {}), 'content-type': 'application/json' }, ...init }, e)
+    app.request('/api/sync', { method: 'POST', ...init, headers: { ...(init.headers ?? {}), 'content-type': 'application/json' } }, e)
   expect((await post({ body })).status).toBe(401)
   const ok = await post({ body, headers: auth })
   expect(ok.status).toBe(200)
@@ -132,6 +132,21 @@ test('sync は Access の本人でだけ動き、形の合わない body は 400
   expect((await post({ body: 'not json', headers: auth })).status).toBe(400)
   // ローカル開発では固定ユーザー dev として動く
   expect((await post({ body }, env({ DEV_NO_AUTH: '1' }))).status).toBe(200)
+})
+
+test('他サイト発の POST / DELETE は 403（CSRF）。JSON でない POST は 415', async () => {
+  const body = JSON.stringify({ cursor: 0, changes: [] })
+  const json = { ...auth, 'content-type': 'application/json' }
+  const cross = await app.request('/api/sync', { method: 'POST', headers: { ...json, 'sec-fetch-site': 'cross-site' }, body }, env())
+  expect(cross.status).toBe(403)
+  const badOrigin = await app.request('/api/sync', { method: 'DELETE', headers: { ...auth, origin: 'https://evil.example' } }, env())
+  expect(badOrigin.status).toBe(403)
+  const form = await app.request('/api/sync', { method: 'POST', headers: { ...auth, 'content-type': 'text/plain', 'sec-fetch-site': 'same-origin' }, body }, env())
+  expect(form.status).toBe(415)
+  const same = await app.request('/api/sync', { method: 'POST', headers: { ...json, origin: 'http://localhost', 'sec-fetch-site': 'same-origin' }, body }, env())
+  expect(same.status).toBe(200)
+  // GET は対象外（Access のクッキーが Lax でも通る導線を塞がない）
+  expect((await app.request('/api/health', { headers: { ...auth, 'sec-fetch-site': 'cross-site' } }, env())).status).toBe(200)
 })
 
 test('backup はアプリのエクスポートと同じ形', async () => {

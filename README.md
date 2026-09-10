@@ -201,7 +201,8 @@ src/                    PWA
 │   ├── outbox.ts       同期用ミドルウェア。4テーブルへの書き込みを未送信（outbox）に積む
 │   ├── categories.ts   2階層固定カテゴリのシード（約60件）
 │   ├── repo.ts         判定ビューの組み立て、未評価キュー、保存系
-│   └── export.ts       JSON / CSV エクスポートとインポート（§6.4）
+│   ├── export.ts       JSON / CSV エクスポートとインポート（§6.4）
+│   └── validate.ts     同期の受信とインポートに共通の行の検証。壊れた行は飛ばす
 ├── lib/
 │   ├── scanner.ts      BarcodeDetector → zxing-wasm フォールバック
 │   ├── jan.ts          EAN-13 / EAN-8 のチェックディジット検証

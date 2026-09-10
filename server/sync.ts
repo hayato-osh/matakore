@@ -1,5 +1,13 @@
 import type { RecordRow, RecordStore } from './records'
-import { SYNC_PAGE, SYNC_TABLES, type SyncChange, type SyncRequest, type SyncResponse, type SyncTable } from './types'
+import {
+  SYNC_MAX_DATA_CHARS,
+  SYNC_PAGE,
+  SYNC_TABLES,
+  type SyncChange,
+  type SyncRequest,
+  type SyncResponse,
+  type SyncTable,
+} from './types'
 
 // 差分同期（§6.2）。1往復で「未送信の変更を受け取る → cursor より後の変更を返す」の両方をやる。
 // 判定パスには一切関わらない。クライアントは圏外でも・この Worker が落ちていても動き、
@@ -11,6 +19,10 @@ export const userIdOf = (claims: { email?: string; sub?: string } | undefined, d
 
 const isTable = (v: unknown): v is SyncTable => typeof v === 'string' && (SYNC_TABLES as readonly string[]).includes(v)
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** 中身の主キー。クライアント側 src/db/validate.ts と対で保つ。key と食い違う行は墓標が効かなくなるので入口で弾く */
+const primaryKeyOf = (tbl: SyncTable, row: Record<string, unknown>) =>
+  tbl === 'purchases' || tbl === 'categories' ? row.id : row.jan
 
 /** 型の合わないものは 400 に倒す。D1 に変なものを書いてから困るより、入口で止める。 */
 export const parseSyncRequest = (body: unknown): SyncRequest | null => {
@@ -24,6 +36,10 @@ export const parseSyncRequest = (body: unknown): SyncRequest | null => {
     if (!isTable(c.tbl)) return null
     if (typeof c.key !== 'string' || c.key.length === 0 || c.key.length > 200) return null
     if (!(c.data === null || isRecord(c.data))) return null
+    if (c.data !== null) {
+      if (primaryKeyOf(c.tbl, c.data) !== c.key) return null
+      if (JSON.stringify(c.data).length > SYNC_MAX_DATA_CHARS) return null
+    }
     if (typeof c.at !== 'number' || !Number.isFinite(c.at)) return null
     out.push({ tbl: c.tbl, key: c.key, data: c.data, at: c.at })
   }

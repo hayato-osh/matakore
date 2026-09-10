@@ -1,7 +1,8 @@
 import { formatDate } from '../lib/format'
 import { db } from './db'
-import { silently } from './outbox'
+import { silently, type SyncTable } from './outbox'
 import type { Category, Product, Purchase, Review } from './types'
+import { sanitizeRow } from './validate'
 
 // 数年かけて貯める前提のデータなので、JSON / CSV への完全エクスポートを最初のリリースに含める（§6.4）。
 // 後付けにすると構造が複雑化して塩漬けになる。
@@ -98,7 +99,9 @@ export const download = (filename: string, content: string, mime: string) => {
 
 export type ImportResult = { products: number; purchases: number; reviews: number; categories: number }
 
-const asArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+/** 形の通る行だけを残す（同期の受信と同じ検証）。壊れた行は黙って落とし、件数に含めない */
+const rowsOf = <T,>(tbl: SyncTable, v: unknown): T[] =>
+  (Array.isArray(v) ? v : []).map((r) => sanitizeRow(tbl, r)).filter((r): r is Record<string, unknown> => r !== null) as T[]
 
 /** 完全バックアップの取り込み。同じキーは上書きするマージ。 */
 export const importBackup = async (json: string): Promise<ImportResult> => {
@@ -107,12 +110,10 @@ export const importBackup = async (json: string): Promise<ImportResult> => {
   const data = parsed as Partial<Backup>
   if (data.app && data.app !== 'matakore') throw new Error('matakore のバックアップではありません')
 
-  const products = asArray<Product>(data.products).filter((p) => p?.jan && p?.name)
-  const purchases = asArray<Purchase>(data.purchases).filter((p) => p?.id && p?.jan)
-  const reviews = asArray<Review>(data.reviews)
-    .filter((r) => r?.jan && r?.intent)
-    .map((r) => ({ ...r, tags: Array.isArray(r.tags) ? r.tags : [], history: Array.isArray(r.history) ? r.history : [] }))
-  const categories = asArray<Category>(data.categories).filter((c) => c?.id && c?.major && c?.minor)
+  const products = rowsOf<Product>('products', data.products)
+  const purchases = rowsOf<Purchase>('purchases', data.purchases)
+  const reviews = rowsOf<Review>('reviews', data.reviews)
+  const categories = rowsOf<Category>('categories', data.categories)
 
   await db.transaction('rw', db.products, db.purchases, db.reviews, db.categories, async () => {
     if (categories.length) await db.categories.bulkPut(categories)

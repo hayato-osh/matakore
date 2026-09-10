@@ -5,7 +5,7 @@ import Button from '../components/ui/Button'
 import { Chip, ChipRow } from '../components/ui/Chip'
 import Screen from '../components/ui/Screen'
 import SectionTitle from '../components/ui/SectionTitle'
-import { db } from '../db/db'
+import { db, reseedForSync } from '../db/db'
 import { buildBackup, buildPurchasesCsv, buildReviewsCsv, download, importBackup, wipeAll } from '../db/export'
 import { stats } from '../db/repo'
 import { cx } from '../lib/cx'
@@ -126,6 +126,8 @@ export default function SettingsScreen() {
       return
     }
     await wipeAll()
+    // 黙って再シードすると、初回同期でサーバーの墓標に消される。同期に載せて墓標より新しい行にする
+    await reseedForSync()
     location.reload()
   }
 
@@ -204,7 +206,7 @@ export default function SettingsScreen() {
           <div className={styles.wide}>
             <dt>最終同期</dt>
             <dd className={styles.when}>
-              {syncMeta?.syncedAt ? formatDateTime(syncMeta.syncedAt) : syncMeta ? '受信のみ' : 'まだ'}
+              {syncMeta?.syncedAt ? formatDateTime(syncMeta.syncedAt) : syncMeta?.cursor !== undefined ? '受信のみ' : 'まだ'}
             </dd>
           </div>
         </dl>

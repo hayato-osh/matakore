@@ -11,8 +11,12 @@ export type SyncTable = (typeof SYNC_TABLES)[number]
 /** 未送信の1件。at は最後に触った時刻で、サーバーでの新旧比較に使う。 */
 export type Outbox = { tbl: SyncTable; key: string; at: number }
 
-/** 同期の状態。1行だけ（key = 'sync'）。無ければまだ一度もサーバーと話していない。 */
-export type SyncMeta = { key: 'sync'; cursor: number; syncedAt?: number; error?: string }
+/**
+ * 同期の状態。1行だけ（key = 'sync'）。
+ * cursor が無ければまだ初回接続が済んでいない（次回は初回として全部受け取り直す）。
+ * error は初回接続の前でも残す。残さないと、新しい端末でログインが切れていたときに設定画面が何も言えない。
+ */
+export type SyncMeta = { key: 'sync'; cursor?: number; syncedAt?: number; error?: string }
 
 const isSynced = (name: string): name is SyncTable => (SYNC_TABLES as readonly string[]).includes(name)
 

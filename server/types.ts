@@ -40,3 +40,9 @@ export type SyncResponse = { cursor: number; changes: SyncChange[]; more: boolea
 
 /** 1往復で運ぶ上限（push も pull も）。これを超える分は次の往復に回す。 */
 export const SYNC_PAGE = 500
+
+/**
+ * 1行の JSON の上限（文字数）。メモは 120 字、履歴は心変わりの回数分しか増えないので、実データは数 KB で収まる。
+ * D1 の 1 行 1MB に半端に当たって失敗するより、入口で 400 にする。
+ */
+export const SYNC_MAX_DATA_CHARS = 64_000

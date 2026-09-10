@@ -84,7 +84,13 @@ const createWasmScanner = async (): Promise<Scanner> => {
 
 let scannerPromise: Promise<Scanner> | null = null
 
-export const getScanner = () => {
-  scannerPromise ??= (async () => ((await nativeSupported()) ? createNativeScanner() : createWasmScanner()))()
+export const getScanner = (): Promise<Scanner> => {
+  // 失敗（wasm が取れない等）は覚えない。次に開いたときに取り直せるようにする
+  scannerPromise ??= (async () => ((await nativeSupported()) ? createNativeScanner() : createWasmScanner()))().catch(
+    (e: unknown) => {
+      scannerPromise = null
+      throw e
+    },
+  )
   return scannerPromise
 }

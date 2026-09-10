@@ -57,5 +57,12 @@ export const ensureSeeded = async () => {
   })
 }
 
+/**
+ * 「サーバーの控えも含めて削除」の後の再シード。ensureSeeded と違い、同期に載せる。
+ * サーバーには全カテゴリの墓標が残っているので、黙って入れ直すと初回同期で墓標に消される。
+ * 未送信として積んでおけば墓標より新しい行として送られ、この端末にも他の端末にも戻る。
+ */
+export const reseedForSync = () => db.categories.bulkPut(seedCategories())
+
 export const newId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
