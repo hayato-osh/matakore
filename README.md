@@ -14,7 +14,8 @@
 - 記録は裏で Cloudflare D1 と差分同期する。機種変更しても新しい端末で開けば戻る
 - JSON / CSV でいつでも全部持ち出せる
 
-設計の意図と背景は [`DESIGN.md`](./DESIGN.md)、実装上の制約とコードの地図は [`CLAUDE.md`](./CLAUDE.md) にある。
+設計の意図と背景は [`DESIGN.md`](./DESIGN.md)、コードの地図と API は
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)、実装上の制約は [`CLAUDE.md`](./CLAUDE.md) にある。
 
 ## 画面
 
