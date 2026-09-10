@@ -11,7 +11,7 @@ import { stats } from '../db/repo'
 import { cx } from '../lib/cx'
 import { formatDate, formatDateTime } from '../lib/format'
 import { checkResolver, relogin, SOURCE_LABEL } from '../lib/resolver'
-import { BUILD_ID, checkForUpdate } from '../lib/sw'
+import { checkForUpdate } from '../lib/sw'
 import { syncNow, wipeRemote, type SyncOutcome } from '../lib/sync'
 import { getTheme, setTheme, THEMES, type Theme } from '../lib/theme'
 import layout from '../styles/layout.module.css'
@@ -280,18 +280,15 @@ export default function SettingsScreen() {
       </section>
 
       <section className={styles.card}>
-        <SectionTitle>アプリの版</SectionTitle>
+        <SectionTitle>アプリの更新</SectionTitle>
         <p className={cx(text.muted, text.small)}>
-          ビルド <span className={text.mono}>{BUILD_ID}</span>。ホーム画面のアプリは古い版が残りやすいので、
-          表示がおかしいときはここから更新する。起動時と1時間ごとにも自動で確認している。
+          最新版を確認して取り込みます。起動時と1時間ごとにも自動で確認しています。
         </p>
         <Button onClick={() => void update()}>更新を確認</Button>
         {updateStatus && <p className={cx(text.small, text.muted)}>{updateStatus}</p>}
       </section>
 
-      <p className={cx(text.muted, text.small, styles.version)}>
-        matakore — Phase 2（D1 に控えを同期・判定はローカル完結）
-      </p>
+
     </Screen>
   )
 }
