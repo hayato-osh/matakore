@@ -1,0 +1,103 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "extends": [
+    "config:recommended",
+    // このリポジトリのコミットは Conventional Commits ではないので prefix を付けない
+    ":semanticCommitsDisabled",
+    // GitHub Actions は SHA 固定を維持する（ci.yml の方針。タグは動かせる）
+    "helpers:pinGitHubActionDigests",
+    // pnpm-lock.yaml の寝かせすぎを月1で解消する
+    ":maintainLockFilesMonthly",
+  ],
+
+  // preset の packageRules は自分の packageRules より後に評価される＝後勝ちで上書きしてくる。
+  // この2つは「まとめ方」を決める規則の束なので、下の packageRules が効かなくなる。
+  // まとめ方はこのファイルだけで決める
+  "ignorePresets": ["group:monorepos", "group:recommended"],
+
+  "timezone": "Asia/Tokyo",
+  // 個人開発なので、PR を見るのは週のはじめだけにする
+  "schedule": ["before 9am on monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+
+  // 公開直後に差し替えられた版を踏まないよう、リリースから3日寝かせる。
+  // internalChecksFilter: strict は「まだ寝かせ中」の版を見つけたら、
+  // 古い版で中途半端な PR を出さずにその更新自体を待つ
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+
+  // 後に書いた規則が勝つ。まとめる規則を先に、束ねたくないものを後に置く
+  "packageRules": [
+    // --- まとめる側 ---
+    {
+      // devDependencies の patch / minor は1本に束ねる
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "dev deps",
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+    },
+
+    // --- 束ねると困るもの ---
+    {
+      // major は単独で。まとめると壊れた1つで全部止まる
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+    },
+    {
+      // oxlint の minor は新しいルールが増えて `pnpm lint` が落ちうる。原因を1 PR に閉じる
+      "matchPackageNames": ["oxlint"],
+      "groupName": null,
+    },
+    {
+      // TypeScript は patch でも型エラーが増えうる（`~6.0.2` 固定なので patch だけ来る）
+      "matchPackageNames": ["typescript"],
+      "groupName": null,
+    },
+
+    // --- 同時に動かさないと壊れるもの（major も一緒に動かすので major 規則より後に置く） ---
+    {
+      // wrangler を上げると worker-configuration.d.ts が変わり、CI の差分チェックが落ちる。
+      // 落ちたら手元で `pnpm types` して PR のブランチに乗せる
+      "matchPackageNames": ["wrangler", "@cloudflare/**"],
+      "groupName": "cloudflare",
+    },
+    {
+      // vite と vitest はメジャーが連動する。プラグインも一緒に動かす
+      "matchPackageNames": ["vite", "vitest", "vite-plugin-pwa", "@vitejs/**", "@vitest/**"],
+      "groupName": "vite",
+    },
+    {
+      // react / react-dom / 型は必ず同時に上げる
+      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "groupName": "react",
+    },
+    {
+      // 書体。1ウェイト約0.9MB を SW に焼いているので、差分が出たら初回DL量を見る
+      "matchPackageNames": ["@fontsource/**"],
+      "groupName": "fontsource",
+    },
+    {
+      // pnpm 本体（package.json の packageManager）。CI の pnpm/action-setup はここを読む
+      "matchDepTypes": ["packageManager"],
+      "groupName": "pnpm",
+    },
+    {
+      // .node-version。node versioning は LTS になるまで新メジャーを安定扱いしないので、
+      // 非 LTS へ飛ばされることはない
+      "matchManagers": ["nodenv"],
+      "groupName": "node",
+    },
+  ],
+
+  // 脆弱性対応はスケジュールも寝かせも無視して即 PR（Renovate の既定動作）
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+  },
+  "osvVulnerabilityAlerts": true,
+}
