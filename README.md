@@ -1,7 +1,12 @@
 # matakore（またこれ）
 
+[![CI](https://github.com/hayato-osh/matakore/actions/workflows/ci.yml/badge.svg)](https://github.com/hayato-osh/matakore/actions/workflows/ci.yml)
+
 スーパーの棚の前でバーコードを読むと「また買うか」が3秒で分かる、個人用の食品評価データベース。
 設計の意図と背景は [`DESIGN.md`](./DESIGN.md)、実装時の制約は [`CLAUDE.md`](./CLAUDE.md) にある。
+
+ホスティングされたサービスではない。**自分の Cloudflare アカウントに1人用として立てて使う**
+（[自分の Cloudflare に立てる](#自分の-cloudflare-に立てる)）。ライセンスは MIT。
 
 現在の実装範囲は **Phase 2**（`DESIGN.md` §8）。
 スキャン → 判定表示までは外部API接続なしで完結し、未知の JAN だけ同一オリジンの `/api` 経由で
@@ -14,7 +19,7 @@ Phase 0 の動線（手入力）にそのまま落ちる。全記録の控えは
 **Cloudflare Worker 1本**で PWA と API を同一オリジンから配信する（`DESIGN.md` §6.2）。
 
 ```
-                 https://matakore.<account>.workers.dev
+                 https://matakore.example.com（Worker Custom Domain）
                  ┌──────────────────────────────────────┐
   /            → │ 静的アセット（dist/client）             │  Vite でビルドした PWA。
   /assets/*      │   SPA フォールバック → index.html        │  Service Worker が丸ごと
@@ -38,10 +43,14 @@ Phase 0 の動線（手入力）にそのまま落ちる。全記録の控えは
 
 ```bash
 pnpm install
-cp .dev.vars.example .dev.vars   # DEV_NO_AUTH=1 が入っている。ローカルでは Access 検証を外す
-pnpm migrate:local               # D1 をローカルに作る
+cp wrangler.example.jsonc wrangler.jsonc   # ローカルはこのままで動く。デプロイするときだけ中を自分の値にする
+cp .dev.vars.example .dev.vars             # DEV_NO_AUTH=1 が入っている。ローカルでは Access 検証を外す
+pnpm migrate:local                         # D1 をローカルに作る
 pnpm dev
 ```
+
+Node 22 以上・pnpm 10 以上（`.node-version` / `package.json` の `engines`）。
+`wrangler.jsonc` と `.dev.vars` は自分の環境の値を入れる場所なので git に入れない。
 
 Yahoo!／楽天のアプリIDが無くても Open Food Facts だけで動く（日本の食品はほぼ引けないが、配線の確認はできる）。
 `.dev.vars` のキーは値が空でも消さないこと。`pnpm types` がここからキーを拾って `Env` の型を作る。
@@ -135,27 +144,41 @@ DELETE /api/sync          → サーバーの控えを全部墓標にする（�
 Access アプリの作り方（Cloudflare ダッシュボード）:
 
 1. Zero Trust → Access → Applications → Add an application → **Self-hosted**
-2. Application domain に `matakore.example.com`（パスは空＝全体）
+2. Application domain に自分のホスト名（`wrangler.jsonc` の `routes` と同じもの。パスは空＝全体）
 3. Session duration は長め（1 か月）にする。店頭で毎回ログインさせない
 4. Policy: Allow、Include に自分のメールアドレス
 5. 作成後の Overview にある **Application Audience (AUD) Tag** と、Zero Trust の **Team domain**
    （`<team>.cloudflareaccess.com`）を `wrangler.jsonc` の `ACCESS_AUD` / `ACCESS_TEAM_DOMAIN` に入れて `pnpm deploy`
 
-## デプロイ
+## 自分の Cloudflare に立てる
 
-本番は **https://matakore.example.com**（Worker Custom Domain。DNS と証明書は Cloudflare が持つ）。
-D1 `matakore` は作成済みで、その ID が `wrangler.jsonc` に入っている。
+必要なもの: Cloudflare アカウント（無料枠で足りる）、Cloudflare に DNS を置いているドメイン1つ、
+Zero Trust（Access。無料枠あり）。Yahoo!／楽天のアプリIDは任意（無いと Open Food Facts だけになる）。
 
 ```bash
 npx wrangler login
-pnpm deploy                              # build して wrangler deploy。ルートとカスタムドメインもここで同期される
-pnpm migrate:remote                      # migrations/ に追加があったとき（Phase 2 の records テーブルはここで作る）
-npx wrangler secret put YAHOO_APP_ID     # https://e.developer.yahoo.co.jp/ の Client ID
-npx wrangler secret put RAKUTEN_APP_ID   # https://webservice.rakuten.co.jp/ のアプリID
+npx wrangler d1 create matakore          # 出てきた database_id を wrangler.jsonc に入れる
 ```
 
-別アカウントに立てるときは `npx wrangler d1 create matakore` で出た `database_id`、自分のゾーンのホスト名、
-Access の `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` を `wrangler.jsonc` に書き換えてから同じ手順を踏む。
+`wrangler.jsonc` を自分の値に変える（`wrangler.example.jsonc` のコメントにも同じことが書いてある）:
+
+| キー | 入れるもの |
+|---|---|
+| `routes[0].pattern` | 配信するホスト名（例 `matakore.example.com`）。DNS と証明書は Cloudflare が Worker Custom Domain として自動で持つ |
+| `d1_databases[0].database_id` | 上の `d1 create` が出した ID |
+| `vars.ACCESS_TEAM_DOMAIN` | Zero Trust の Team domain（`<team>.cloudflareaccess.com`） |
+| `vars.ACCESS_AUD` | Access アプリの Application Audience (AUD) Tag（上の「認証」の手順で作る） |
+| `vars.OFF_USER_AGENT` | Open Food Facts に名乗る UA。連絡先を自分のものにする |
+
+```bash
+pnpm deploy                              # build して wrangler deploy。ルートとカスタムドメインもここで同期される
+pnpm migrate:remote                      # D1 のスキーマを作る（migrations/ に追加があったときも同じ）
+npx wrangler secret put YAHOO_APP_ID     # https://e.developer.yahoo.co.jp/ の Client ID（任意）
+npx wrangler secret put RAKUTEN_APP_ID   # https://webservice.rakuten.co.jp/ のアプリID（任意）
+```
+
+Access アプリを作る前にデプロイしても `/api` は 503 を返すだけで、判定（ローカル）は動く。
+`ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` を入れて `pnpm deploy` し直せば繋がる。
 
 スマホで URL を開いてログインし、ホーム画面に追加する。iOS はホーム画面アプリと Safari で
 保存領域（クッキー・IndexedDB）が別なので、記録はホーム画面側で付け始めること。
@@ -178,9 +201,11 @@ Access の `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` を `wrangler.jsonc` に書き換
 ## コードの地図
 
 ```
-wrangler.jsonc          Worker の設定。assets（SPA）/ run_worker_first["/api/*"] / D1 / Access の vars / workers_dev: false
+wrangler.example.jsonc  Worker の設定のひな形。assets（SPA）/ run_worker_first["/api/*"] / D1 / Access の vars / workers_dev: false
+wrangler.jsonc          ↑ をコピーして自分の値を入れたもの（git に入れない）
 migrations/             D1 スキーマ（products = 共有マスタ、misses = 未発見の記憶、records = 記録の控え）
 .dev.vars.example       ローカルの秘密のひな形（DEV_NO_AUTH / YAHOO_APP_ID / RAKUTEN_APP_ID）
+.github/workflows/      CI（lint / typecheck / test / 生成物の差分 / build）。デプロイは自動化しない
 worker-configuration.d.ts  `pnpm types` が生成する Env と Workers ランタイムの型（手で書かない）
 
 server/                 Cloudflare Worker（DOM 無し。tsconfig.worker.json）
@@ -257,6 +282,12 @@ src/                    PWA
 ## まだ無いもの
 
 `DESIGN.md` §8 の Phase 3 以降。
+
+## ライセンス
+
+[MIT](./LICENSE)。アイコン（`public/`）もこのリポジトリのもので同じ扱い。
+同梱している webfont の Zen Kaku Gothic New と DM Mono はどちらも SIL Open Font License 1.1
+（`@fontsource/*` パッケージ経由）。
 
 - 夜間バッチ（Cron）。LLM によるカテゴリ補完、傾向分析の事前計算。回す対象がまだ無いので置いていない
 - 集計ダッシュボード、LLM 嗜好プロファイル、類似商品推薦

@@ -26,3 +26,5 @@ dist-ssr
 # Cloudflare Workers
 .dev.vars
 .wrangler
+# 自分の Cloudflare の値（Access / ドメイン / D1 の ID）を入れる場所。wrangler.example.jsonc をコピーして作る
+wrangler.jsonc

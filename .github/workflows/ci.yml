@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # wrangler.jsonc と .dev.vars は git に入れない。ひな形をそのまま使う（ローカルで動く値になっている）
+      - run: cp wrangler.example.jsonc wrangler.jsonc && cp .dev.vars.example .dev.vars
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # worker-configuration.d.ts は生成物をコミットしている。ひな形から作り直して差分が出たら、
+      # vars / bindings のキーを変えたのに pnpm types を忘れている
+      - name: worker-configuration.d.ts が最新か
+        run: pnpm types && git diff --exit-code -- worker-configuration.d.ts
+
+      - run: pnpm build

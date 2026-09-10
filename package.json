@@ -3,6 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",

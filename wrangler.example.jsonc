@@ -1,3 +1,7 @@
+// cp wrangler.example.jsonc wrangler.jsonc して使う（wrangler.jsonc は git に入れない）。
+// ローカル開発（pnpm dev）はこのままで動く。自分の Cloudflare に立てるときだけ
+// ACCESS_TEAM_DOMAIN / ACCESS_AUD / routes / database_id を自分の値に変える（README「自分の Cloudflare に立てる」）。
+// vars や bindings のキーを足したら pnpm types で worker-configuration.d.ts を作り直す（CI が差分を見る）。
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "matakore",
@@ -20,19 +24,22 @@
   // 非機密の設定。機密（YAHOO_APP_ID / RAKUTEN_APP_ID）は wrangler secret put で入れる。
   // ローカル開発では .dev.vars（.dev.vars.example をコピー）。
   "vars": {
-    // Open Food Facts が要求する識別用 UA。連絡先を入れるのが作法
+    // Open Food Facts が要求する識別用 UA。自分で立てるなら連絡先（リポジトリ URL など）を自分のものにする
     "OFF_USER_AGENT": "matakore/0.1 (https://github.com/hayato-osh/matakore)",
     // Cloudflare Access（§6.3）。Zero Trust → Access → Applications で作ったアプリの値。
-    // TEAM_DOMAIN は <team>.cloudflareaccess.com、AUD はアプリの Application Audience (AUD) Tag
+    // TEAM_DOMAIN は <team>.cloudflareaccess.com、AUD はアプリの Application Audience (AUD) Tag。
+    // どちらかが空だと /api は 503 を返す（「誰でも通す」ではなく「誰も通さない」に倒す）
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": ""
   },
 
   // 本番の配信先。DNS レコードと証明書は Cloudflare が Worker Custom Domain として自動で持つ。
+  // 自分のゾーンのホスト名に変える
   "routes": [{ "pattern": "matakore.example.com", "custom_domain": true }],
 
   // 自前共有マスタ（§4.2 の第2段）。過去に解決した JAN のスナップショットを持ち、外部API呼び出しを減らす。
-  // wrangler d1 create matakore で作った本番 DB。ローカル開発は .wrangler/state の別物を使う。
+  // wrangler d1 create matakore で出た database_id を入れる。ローカル開発は .wrangler/state の別物を使うので、
+  // デプロイしないなら下のダミー値のままでよい
   "d1_databases": [
     {
       "binding": "DB",

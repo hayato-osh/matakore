@@ -13,11 +13,14 @@ Cron（夜間バッチ）はまだ無い。回す対象（LLM 補完・傾向分
 **デプロイ単位は Cloudflare Worker 1本。** PWA（静的アセット）と API（Hono）を同一オリジンから配信する。
 `wrangler.jsonc` がルートにあり、`server/` が Worker、`src/` が PWA。`@cloudflare/vite-plugin` で
 `pnpm dev` 一発で両方が同じポートに上がる。CORS も API の URL 設定も存在しない。
+`wrangler.jsonc` は自分の Cloudflare の値（Access / ドメイン / D1 の ID）を入れる場所なので **git に入れない**。
+追跡しているのは `wrangler.example.jsonc`（ローカルはそのままで動く値）で、キーを足したら両方を更新する。
 
 パッケージマネージャは **pnpm**（単一パッケージ。`pnpm-workspace.yaml` は postinstall 許可の設定だけ）。
 
 ```bash
 pnpm install
+cp wrangler.example.jsonc wrangler.jsonc   # ローカルはそのままで動く。デプロイ先の値は自分のものに変える
 cp .dev.vars.example .dev.vars   # DEV_NO_AUTH=1 / YAHOO_APP_ID / RAKUTEN_APP_ID（値が空でもキーは残す）
 pnpm migrate:local               # D1 をローカルに作る（.wrangler/state）
 pnpm dev              # PWA + Worker（/api）を同じポートで
@@ -29,7 +32,7 @@ pnpm deploy           # build して wrangler deploy
 pnpm test             # vitest run（src/ と server/ の両方）
 pnpm lint             # oxlint
 pnpm typecheck        # tsc -b（app / node / worker の3プロジェクト）
-pnpm types            # wrangler.jsonc か .dev.vars のキーを変えたら worker-configuration.d.ts を再生成
+pnpm types            # wrangler.jsonc か .dev.vars のキーを変えたら worker-configuration.d.ts を再生成（CI が差分を見る）
 ```
 
 コードの地図は `README.md` を見ること。Cron はまだ1行も存在しない。
