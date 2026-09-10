@@ -101,6 +101,28 @@ npx wrangler secret put RAKUTEN_APP_ID   # https://webservice.rakuten.co.jp/（�
 
 Access を設定しないままデプロイすると `/api` は 503 を返すが、判定（ローカル）は動く。
 
+**5. GitHub Actions から自動デプロイする（任意）**
+
+CLI を使わず、`main` への push で本番に出せる。`wrangler.jsonc` は git に置かないので、
+CI ではひな形と設定値からその場で組み立てる（`scripts/build-wrangler-config.mjs`）。
+
+リポジトリの Settings → Secrets and variables → Actions に入れる。
+
+| 種別 | 名前 | 中身 |
+|---|---|---|
+| Secrets | `CLOUDFLARE_API_TOKEN` | Cloudflare のダッシュボードで「Edit Cloudflare Workers」テンプレートから作る。対象アカウントだけに絞る |
+| Secrets | `CLOUDFLARE_ACCOUNT_ID` | `npx wrangler whoami` で出る ID |
+| Variables | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` / `CUSTOM_DOMAIN` / `D1_DATABASE_ID` | `wrangler.jsonc` に入れたのと同じ値 |
+| Variables | `DEPLOY_ON_PUSH` | `true` にすると `main` への push で自動デプロイする。未設定なら出ない |
+
+`DEPLOY_ON_PUSH` を入れなくても、Actions タブの CI から Run workflow で手動デプロイできる。
+デプロイは `check`（lint / typecheck / test / build）が通ったときだけ走る。
+
+D1 のマイグレーションは CI で流さない。スキーマを変えたときだけ手で `pnpm migrate:remote` する。
+
+公開リポジトリだが、fork からの Pull Request に Secrets は渡らない（GitHub 側の仕様）。
+デプロイが動く引き金は `main` への push と手動実行だけで、どちらも書き込み権限が要る。
+
 スマホで URL を開いてログインし、ホーム画面に追加する。iOS はホーム画面アプリと Safari で
 保存領域が別なので、記録はホーム画面側で付け始めること。
 

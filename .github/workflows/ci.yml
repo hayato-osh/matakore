@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 手でデプロイしたいとき（Actions タブ → CI → Run workflow）。DEPLOY_ON_PUSH に関係なく出る
+  workflow_dispatch:
 
 # アクションはタグではなくコミット SHA で固定する。タグは動かせるので、
 # 上流が乗っ取られたときに CI へ任意のコードが入る。上げるときは SHA とコメントの両方を変える。
@@ -37,3 +39,63 @@ jobs:
         run: pnpm types && git diff --exit-code -- worker-configuration.d.ts
 
       - run: pnpm build
+
+  # main に入ったものだけ本番へ出す。check が通ってから走る。
+  # push での自動デプロイは Variables の DEPLOY_ON_PUSH=true で入れる（既定は出さない）。
+  # 手動実行（workflow_dispatch）はスイッチに関係なく常に出す。
+  # マイグレーション（pnpm migrate:remote）はここでは回さない。スキーマ変更は手で流す。
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ON_PUSH == 'true')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # 何が足りないのかを、ビルドを回す前に言う
+      - name: 必要な値が揃っているか
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -n "$TOKEN" ]   || missing="$missing CLOUDFLARE_API_TOKEN(secret)"
+          [ -n "$ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID(secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::次が未設定:$missing — Settings → Secrets and variables → Actions で入れる"
+            exit 1
+          fi
+
+      # wrangler.jsonc は git に入れないので、ひな形と Variables から組み立てる。
+      # 中身は公開識別子だけなので Variables（ログに出る）。資格情報は下の Secrets の2つだけ。
+      - name: wrangler.jsonc を組み立てる
+        env:
+          ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD: ${{ vars.ACCESS_AUD }}
+          CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+          D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
+        run: node scripts/build-wrangler-config.mjs > wrangler.jsonc
+
+      # wrangler は CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID を直接読む。
+      # pnpm deploy = pnpm build && wrangler deploy。ビルドが assets の出力先を設定に埋めるので、
+      # build を挟まずに wrangler deploy だけを呼ぶと落ちる。
+      - name: デプロイ
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm deploy
