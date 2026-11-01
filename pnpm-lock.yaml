@@ -16,10 +16,10 @@ importers:
         version: 5.3.1
       dexie:
         specifier: ^4.0.11
-        version: 4.4.6
+        version: 4.4.7
       dexie-react-hooks:
         specifier: ^1.1.7
-        version: 1.1.7(@types/react@19.2.18)(dexie@4.4.6)(react@19.2.8)
+        version: 1.1.7(@types/react@19.2.18)(dexie@4.4.7)(react@19.2.8)
       hono:
         specifier: ^4.13.7
         version: 4.13.14
@@ -1667,8 +1667,8 @@ packages:
       dexie: ^3.2 || ^4.0.1-alpha
       react: '>=16'
 
-  dexie@4.4.6:
-    resolution: {integrity: sha512-hJP/BO6mjB+tX6hToIO1kmxYLNmun90wYbfcoAoLpKEyDYal/k33dg0TAfoUe2TDsbbLoVIzljJ3BN2UbR5EOg==}
+  dexie@4.4.7:
+    resolution: {integrity: sha512-wemFiCl3DTCnfzyqepUTX1ugbYbkTrw3aEZOG7YjAOUoEQB5g5PrEywPzk5JpbX/SxqQ9IvjUpxCDIEjoOWEfA==}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -4126,13 +4126,13 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  dexie-react-hooks@1.1.7(@types/react@19.2.18)(dexie@4.4.6)(react@19.2.8):
+  dexie-react-hooks@1.1.7(@types/react@19.2.18)(dexie@4.4.7)(react@19.2.8):
     dependencies:
       '@types/react': 19.2.18
-      dexie: 4.4.6
+      dexie: 4.4.7
       react: 19.2.8
 
-  dexie@4.4.6: {}
+  dexie@4.4.7: {}
 
   dunder-proto@1.0.1:
     dependencies:
