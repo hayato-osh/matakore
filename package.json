@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "packageManager": "pnpm@11.28.12",
+  "packageManager": "pnpm@11.29.0",
   "engines": {
     "node": ">=24",
     "pnpm": ">=10"
